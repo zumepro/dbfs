@@ -1,0 +1,11 @@
+[package]
+name = "db_fs"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+strip = true
+
+[dependencies]
+sqlx = "0.8.2"
+tokio = { version = "1.40.0", features = ["full"] }
