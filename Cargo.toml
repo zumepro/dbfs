@@ -11,4 +11,5 @@ inet_testing = []
 
 [dependencies]
 futures = "0.3.31"
+sqlx = { version = "0.8.2", features = ["runtime-tokio"] }
 tokio = { version = "1.40.0", features = ["full"] }
