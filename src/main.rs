@@ -8,6 +8,7 @@ fn main() {
 }
 
 
+#[cfg(not(feature = "integration_testing"))]
 #[cfg(test)]
 mod test {
     #[test]

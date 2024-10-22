@@ -73,7 +73,7 @@ impl DbConnector {
 }
 
 
-//#[cfg(feature = "integration_testing")]
+#[cfg(feature = "integration_testing")]
 #[cfg(test)]
 mod test {
     use super::*;
