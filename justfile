@@ -10,5 +10,9 @@ build:
 test:
     cargo test
 
+[group("testing")]
+test_int:
+    cargo test --features integration_testing
+
 clean:
     cargo clean
