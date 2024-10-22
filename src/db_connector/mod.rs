@@ -61,7 +61,12 @@ impl Into<String> for DbConnectorError { fn into(self) -> String { format!("{}",
 /// A command is an SQL query that expects no results (just success or fail). Command has a separate method to save
 /// resources.
 /// ```rust
-/// db_connector.query("INSERT INTO `table` (`id`, `value`) VALUES (?, ?)", vec![])
+/// let result = conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()]));
+/// ```
+/// # Query
+/// A query is an SQL query that expects results.
+/// ```rust
+/// let rows: Vec<MyStruct> = conn.query("SELECT * FROM `test_prepared` WHERE `id` = ?", Some(&vec![3.into()])).unwrap();
 /// ```
 ///
 #[derive(Debug)]
