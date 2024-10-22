@@ -9,19 +9,6 @@ Absolutely sane project. A working fuse adapter for DB-based filesystem.
 
 ### Building
 Build/test recipes can be viewed with `just -l`.
-Example output:
-```text
-Available recipes:
-    clean
-
-    [building]
-    build
-    run
-
-    [testing]
-    test
-    test_int
-```
 
 
 ### Integration testing
