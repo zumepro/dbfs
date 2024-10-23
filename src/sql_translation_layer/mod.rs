@@ -1,4 +1,6 @@
-mod objects;
+mod database_objects;
+pub mod driver_objects;
+
 
 use fuser;
 use std::ffi::OsString;

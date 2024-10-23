@@ -1,8 +1,8 @@
 mod settings;
 mod cmd_args;
-mod db_connector;
-mod sql_translation_layer;
-mod fuse_driver;
+pub mod db_connector;
+pub mod sql_translation_layer;
+pub mod fuse_driver;
 
 
 fn main() {
