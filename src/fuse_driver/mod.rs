@@ -63,13 +63,13 @@ impl fuser::Filesystem for DbfsDriver {
 		
 		loop {
 			let entry = match self.tl.readdir(inode, i as u64) {
-				Ok(entry) => entry,
-				Err(err) => match err {
-					Error::OutOfEntries => break,
-					_ => {
-						reply.error(ENOENT);
-						return
-					}
+				Ok(entry) => match entry {
+					Some(entry) => entry,
+					None => break
+				},
+				Err(_) => {
+					reply.error(ENOENT);
+					return
 				}
 			};
 
