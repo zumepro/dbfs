@@ -1,3 +1,0 @@
---
--- DBFS prepare database script
---

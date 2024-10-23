@@ -14,9 +14,12 @@ test:
     cargo test
 
 
+_test_db:
+    prove db_tests
+
 [group("testing")]
 [doc("Run integration tests")]
-test_int:
+test_int: _test_db
     cargo test --features integration_testing
 
 
@@ -33,8 +36,9 @@ _prepare_setup_db:
     #!/bin/bash
     user_creation="CREATE DATABASE \`dbfs\`; GRANT ALL PRIVILEGES ON \`dbfs\`.* TO 'dbfs'@'%' IDENTIFIED BY 'dbfs'; USE \`dbfs\`;"
     setup_file=$(cat "./sql/testing.sql")
+    data_file=$(cat "./sql/dbfs_test.sql")
     quit=$(echo -e "\nEXIT;")
-    echo "$user_creation$setup_file$quit" | podman exec -it dbfs_intest_db mariadb
+    echo "$user_creation$setup_file$data_file$quit" | podman exec -it dbfs_intest_db mariadb
 
 
 [group("testing")]
