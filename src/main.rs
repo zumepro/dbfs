@@ -1,10 +1,14 @@
 mod settings;
+mod cmd_args;
 mod db_connector;
 mod sql_translation_layer;
+mod fuse_driver;
 
 
 fn main() {
-    println!("Hello, world!");
+	let args = cmd_args::parse();
+	let tl = sql_translation_layer::TranslationLayer::new();
+	fuse_driver::run_forever(tl, &args.mountpoint);
 }
 
 
