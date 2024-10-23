@@ -62,7 +62,7 @@ impl fuser::Filesystem for DbfsDriver {
 		let mut i = offset;
 		
 		loop {
-			let entry = match self.tl.readdir(inode, offset as u64) {
+			let entry = match self.tl.readdir(inode, i as u64) {
 				Ok(entry) => entry,
 				Err(err) => match err {
 					Error::OutOfEntries => break,
