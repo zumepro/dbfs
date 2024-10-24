@@ -19,9 +19,11 @@ pub enum FileType {
 ///
 /// # Permission values
 ///
-/// - `x` (execute) - **1**
-/// - `w` (write)   - **2**
-/// - `r` (read)    - **4**
+/// | Flag | Permission | Value |
+/// | ---- | ---------- | ----- |
+/// | `x`  | Execute    | **1** |
+/// | `w`  | Write      | **2** |
+/// | `r`  | Read       | **4** |
 ///
 /// # Values in fields
 /// The values in fields in this struct are the sum of all permissions for the user or group.
