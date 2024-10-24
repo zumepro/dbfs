@@ -14,7 +14,11 @@ Build/test recipes can be viewed with `just -l`.
 ### Integration testing
 To run integration tests:
 
-1. Setup integration testing environment with
+1. Install dependencies: `podman`, `perl`, `perl-dbd-mysql`, `just`
+```bash
+sudo pacman -Syu podman perl perl-dbd-mysql just
+```
+2. Setup integration testing environment with
 ```bash
 just prepare
 ```
@@ -26,4 +30,3 @@ just test_int
 ```bash
 just stop
 ```
-
