@@ -39,6 +39,12 @@ pub struct FileAttr {
 	pub ino: u32,
 	/// Filesize in bytes
 	pub bytes: u64,
+	/// Owner user id
+	pub uid: u64,
+	/// Group id
+	pub gid: u64,
+	/// Number of hardlinks
+	pub hardlinks: u64,
 	/// Filesize in blocks (4096) - rounded up
 	pub blocks: u64,
 	/// Time of last access
