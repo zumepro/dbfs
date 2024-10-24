@@ -57,10 +57,10 @@ CREATE TABLE `inode` (
   `owner` int(10) UNSIGNED NOT NULL,
   `group` int(10) UNSIGNED NOT NULL,
   `file_type` char(1) NOT NULL,
-  `special_bits` tinyint(4) NOT NULL DEFAULT 0,
-  `user_perm` tinyint(4) NOT NULL DEFAULT 0,
-  `group_perm` tinyint(4) NOT NULL DEFAULT 0,
-  `other_perm` tinyint(4) NOT NULL DEFAULT 0,
+  `special_bits` tinyint(4) UNSIGNED NOT NULL DEFAULT 0,
+  `user_perm` tinyint(4) UNSIGNED NOT NULL DEFAULT 0,
+  `group_perm` tinyint(4) UNSIGNED NOT NULL DEFAULT 0,
+  `other_perm` tinyint(4) UNSIGNED NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `modified_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `accessed_at` timestamp NOT NULL DEFAULT current_timestamp()
@@ -72,10 +72,10 @@ INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_
 (3, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:56:34', '2024-10-24 17:57:14', '2024-10-24 17:56:34');
 
 CREATE TABLE `permissions` (
-  `id` tinyint(4) NOT NULL,
-  `can_read` tinyint(1) NOT NULL,
-  `can_write` tinyint(1) NOT NULL,
-  `can_execute` tinyint(1) NOT NULL
+  `id` tinyint(4) UNSIGNED NOT NULL,
+  `can_read` tinyint(1) UNSIGNED NOT NULL,
+  `can_write` tinyint(1) UNSIGNED NOT NULL,
+  `can_execute` tinyint(1) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 INSERT INTO `permissions` (`id`, `can_read`, `can_write`, `can_execute`) VALUES
@@ -89,10 +89,10 @@ INSERT INTO `permissions` (`id`, `can_read`, `can_write`, `can_execute`) VALUES
 (7, 1, 1, 1);
 
 CREATE TABLE `special_bits` (
-  `id` tinyint(4) NOT NULL,
-  `setuid` tinyint(1) NOT NULL,
-  `setgid` tinyint(1) NOT NULL,
-  `sticky` tinyint(1) NOT NULL,
+  `id` tinyint(4) UNSIGNED NOT NULL,
+  `setuid` tinyint(1) UNSIGNED NOT NULL,
+  `setgid` tinyint(1) UNSIGNED NOT NULL,
+  `sticky` tinyint(1) UNSIGNED NOT NULL,
   `description` varchar(100) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
