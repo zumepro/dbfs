@@ -1,11 +1,6 @@
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-
-
-
-
 START TRANSACTION;
 SET time_zone = "+00:00";
-
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -20,7 +15,11 @@ CREATE TABLE `block` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
-(2, 1, 0x48656c6c6f2c20776f726c64210a);
+(2, 1, 0x48656c6c6f2c20776f726c64210a),
+(3, 1, REPEAT(CHAR(0), 4096)),
+(3, 2, REPEAT(CHAR(0), 4096)),
+(3, 3, REPEAT(CHAR(0), 4096)),
+(3, 4, 0x616161610a);
 
 CREATE TABLE `file` (
   `id` int(10) UNSIGNED NOT NULL,
@@ -31,7 +30,18 @@ CREATE TABLE `file` (
 
 INSERT INTO `file` (`id`, `name`, `inode_id`, `parent_id`) VALUES
 (1, '/', 1, NULL),
-(2, 'test.txt', 2, 1);
+(2, 'test.txt', 2, 1),
+(3, 'test.bin', 3, 1);
+
+CREATE TABLE `file_types` (
+  `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+INSERT INTO `file_types` (`id`, `description`) VALUES
+('-', 'Regular file'),
+('d', 'Directory'),
+('l', 'Symbolic link');
 
 CREATE TABLE `group` (
   `id` int(10) UNSIGNED NOT NULL,
@@ -39,21 +49,62 @@ CREATE TABLE `group` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `group` (`id`, `name`) VALUES
-(1, 'root');
+(1, 'root'),
+(2, 'user');
 
-CREATE TABLE `inodes` (
+CREATE TABLE `inode` (
   `id` int(10) UNSIGNED NOT NULL,
-  `mode` char(10) NOT NULL,
   `owner` int(10) UNSIGNED NOT NULL,
   `group` int(10) UNSIGNED NOT NULL,
+  `file_type` char(1) NOT NULL,
+  `special_bits` tinyint(4) NOT NULL DEFAULT 0,
+  `user_perm` tinyint(4) NOT NULL DEFAULT 0,
+  `group_perm` tinyint(4) NOT NULL DEFAULT 0,
+  `other_perm` tinyint(4) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `modified_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `accessed_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `inodes` (`id`, `mode`, `owner`, `group`, `created_at`, `modified_at`, `accessed_at`) VALUES
-(1, 'drwxr-xr-x', 1, 1, '2024-10-23 12:40:31', '2024-10-23 12:40:31', '2024-10-23 12:40:31'),
-(2, '-rw-r--r--', 1, 1, '2024-10-23 12:41:11', '2024-10-23 12:41:11', '2024-10-23 12:41:11');
+INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
+(1, 1, 1, 'd', 0, 7, 7, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52'),
+(2, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:54:00', '2024-10-24 17:54:00', '2024-10-24 17:54:00'),
+(3, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:56:34', '2024-10-24 17:57:14', '2024-10-24 17:56:34');
+
+CREATE TABLE `permissions` (
+  `id` tinyint(4) NOT NULL,
+  `can_read` tinyint(1) NOT NULL,
+  `can_write` tinyint(1) NOT NULL,
+  `can_execute` tinyint(1) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+INSERT INTO `permissions` (`id`, `can_read`, `can_write`, `can_execute`) VALUES
+(0, 0, 0, 0),
+(1, 0, 0, 1),
+(2, 0, 1, 0),
+(3, 0, 1, 1),
+(4, 1, 0, 0),
+(5, 1, 0, 1),
+(6, 1, 1, 0),
+(7, 1, 1, 1);
+
+CREATE TABLE `special_bits` (
+  `id` tinyint(4) NOT NULL,
+  `setuid` tinyint(1) NOT NULL,
+  `setgid` tinyint(1) NOT NULL,
+  `sticky` tinyint(1) NOT NULL,
+  `description` varchar(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+INSERT INTO `special_bits` (`id`, `setuid`, `setgid`, `sticky`, `description`) VALUES
+(0, 0, 0, 0, 'No special bits'),
+(1, 0, 0, 1, 'Sticky bit'),
+(2, 0, 1, 0, 'Set group ID'),
+(3, 0, 1, 1, 'Set group ID and Sticky bit'),
+(4, 1, 0, 0, 'Set user ID'),
+(5, 1, 0, 1, 'Set user ID and Sticky bit'),
+(6, 1, 1, 0, 'Set user ID and Set group ID'),
+(7, 1, 1, 1, 'Set user ID, Set group ID, and Sticky bit');
 
 CREATE TABLE `user` (
   `id` int(10) UNSIGNED NOT NULL,
@@ -61,7 +112,8 @@ CREATE TABLE `user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `user` (`id`, `name`) VALUES
-(1, 'root');
+(1, 'root'),
+(2, 'user');
 
 
 ALTER TABLE `block`
@@ -72,45 +124,60 @@ ALTER TABLE `file`
   ADD KEY `file_inode` (`inode_id`),
   ADD KEY `file_parent` (`parent_id`);
 
+ALTER TABLE `file_types`
+  ADD PRIMARY KEY (`id`);
+
 ALTER TABLE `group`
   ADD PRIMARY KEY (`id`);
 
-ALTER TABLE `inodes`
+ALTER TABLE `inode`
   ADD PRIMARY KEY (`id`),
   ADD KEY `inode_owner` (`owner`),
-  ADD KEY `inode_group` (`group`);
+  ADD KEY `inode_group` (`group`),
+  ADD KEY `file_type` (`file_type`),
+  ADD KEY `special_bits` (`special_bits`),
+  ADD KEY `user_perm` (`user_perm`),
+  ADD KEY `group_perm` (`group_perm`),
+  ADD KEY `other_perm` (`other_perm`);
+
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `special_bits`
+  ADD PRIMARY KEY (`id`);
 
 ALTER TABLE `user`
   ADD PRIMARY KEY (`id`);
 
 
 ALTER TABLE `file`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 ALTER TABLE `group`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
-ALTER TABLE `inodes`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
+ALTER TABLE `inode`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
 ALTER TABLE `user`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 
 ALTER TABLE `block`
-  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inodes` (`id`);
+  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`);
 
 ALTER TABLE `file`
-  ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inodes` (`id`),
+  ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
   ADD CONSTRAINT `file_parent` FOREIGN KEY (`parent_id`) REFERENCES `file` (`id`);
 
-ALTER TABLE `inodes`
+ALTER TABLE `inode`
+  ADD CONSTRAINT `inode_file_type` FOREIGN KEY (`file_type`) REFERENCES `file_types` (`id`),
   ADD CONSTRAINT `inode_group` FOREIGN KEY (`group`) REFERENCES `group` (`id`),
-  ADD CONSTRAINT `inode_owner` FOREIGN KEY (`owner`) REFERENCES `user` (`id`);
-
-
-
-
+  ADD CONSTRAINT `inode_group_perm` FOREIGN KEY (`group_perm`) REFERENCES `permissions` (`id`),
+  ADD CONSTRAINT `inode_other_perm` FOREIGN KEY (`other_perm`) REFERENCES `permissions` (`id`),
+  ADD CONSTRAINT `inode_owner` FOREIGN KEY (`owner`) REFERENCES `user` (`id`),
+  ADD CONSTRAINT `inode_special_bits` FOREIGN KEY (`special_bits`) REFERENCES `special_bits` (`id`),
+  ADD CONSTRAINT `inode_user_perm` FOREIGN KEY (`user_perm`) REFERENCES `permissions` (`id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

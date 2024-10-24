@@ -3,7 +3,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 7;
+use Test::More tests => 11;
 use DBI;
 
 
@@ -23,17 +23,21 @@ isnt($dbh, 0);
 
 
 my @rows_users = get_rows($dbh->prepare("SELECT * FROM `user`"));
-is(scalar @rows_users, 1);
+is(scalar @rows_users, 2);
 
-is ($rows_users[0]->{'id'}, 1);
-is ($rows_users[0]->{'name'}, "root");
+is($rows_users[0]->{'id'}, 1);
+is($rows_users[0]->{'name'}, "root");
+is($rows_users[1]->{'id'}, 2);
+is($rows_users[1]->{'name'}, "user");
 
 
 my @rows_groups = get_rows($dbh->prepare("SELECT * FROM `group`"));
-is (scalar @rows_users, 1);
+is(scalar @rows_users, 2);
 
-is ($rows_groups[0]->{'id'}, 1);
-is ($rows_groups[0]->{'name'}, "root");
+is($rows_groups[0]->{'id'}, 1);
+is($rows_groups[0]->{'name'}, "root");
+is($rows_groups[1]->{'id'}, 2);
+is($rows_groups[1]->{'name'}, "user");
 
 
 done_testing();
