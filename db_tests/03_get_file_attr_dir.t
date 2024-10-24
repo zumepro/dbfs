@@ -25,12 +25,13 @@ isnt($dbh, 0);
 my $inode_id = "1";
 
 
-my @counters = get_rows($dbh->prepare("WITH `file_tmp` (`blocks`) AS (
-    SELECT COUNT(*) FROM `block` WHERE `inode_id` = '$inode_id'
+my @counters = get_rows($dbh->prepare("WITH `ino` AS (SELECT '$inode_id' AS `ino`),
+`file_tmp` (`blocks`) AS (
+    SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)
 ) SELECT
-    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = '$inode_id' ORDER BY `block_id` DESC LIMIT 1) AS bytes,
+    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
     `blocks` AS blocks,
-    (SELECT COUNT(*) FROM `file` WHERE `inode_id` = '$inode_id') AS `hardlinks`
+    (SELECT COUNT(*) FROM `file` WHERE `inode_id` = (SELECT `ino` FROM `ino`)) AS `hardlinks`
 FROM `file_tmp`"));
 is(scalar @counters, 1);
 
@@ -68,7 +69,7 @@ is($inode[0]->{"owner_can_read"}, 1);
 is($inode[0]->{"owner_can_write"}, 1);
 is($inode[0]->{"owner_can_execute"}, 1);
 is($inode[0]->{"group_can_read"}, 1);
-is($inode[0]->{"group_can_write"}, 1);
+is($inode[0]->{"group_can_write"}, 0);
 is($inode[0]->{"group_can_execute"}, 1);
 is($inode[0]->{"other_can_read"}, 1);
 is($inode[0]->{"other_can_write"}, 0);

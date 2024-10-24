@@ -67,7 +67,7 @@ CREATE TABLE `inode` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
-(1, 1, 1, 'd', 0, 7, 7, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52'),
+(1, 1, 1, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52'),
 (2, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:54:00', '2024-10-24 17:54:00', '2024-10-24 17:54:00'),
 (3, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:56:34', '2024-10-24 17:57:14', '2024-10-24 17:56:34');
 

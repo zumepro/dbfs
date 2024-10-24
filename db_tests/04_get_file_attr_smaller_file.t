@@ -3,7 +3,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 22;
+use Test::More tests => 23;
 use DBI;
 
 
@@ -25,18 +25,22 @@ isnt($dbh, 0);
 my $inode_id = "2";
 
 
-my @counters = get_rows($dbh->prepare("WITH `file_tmp` (`blocks`) AS (
+my @size = get_rows($dbh->prepare("WITH `file_tmp` (`blocks`) AS (
     SELECT COUNT(*) FROM `block` WHERE `inode_id` = '$inode_id'
 ) SELECT
     `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = '$inode_id' ORDER BY `block_id` DESC LIMIT 1) AS bytes,
-    `blocks` AS blocks,
-    (SELECT COUNT(*) FROM `file` WHERE `inode_id` = '$inode_id') AS `hardlinks`
+    `blocks` AS blocks
 FROM `file_tmp`"));
-is(scalar @counters, 1);
+is(scalar @size, 1);
 
-is($counters[0]->{"bytes"}, 14);
-is($counters[0]->{"blocks"}, 1);
-is($counters[0]->{"hardlinks"}, 1);
+is($size[0]->{"bytes"}, 14);
+is($size[0]->{"blocks"}, 1);
+
+
+my @hardlinks = get_rows($dbh->prepare("SELECT COUNT(*) AS `hardlinks` FROM `file` WHERE `inode_id` = '$inode_id'"));
+is(scalar @hardlinks, 1);
+
+is($hardlinks[0]->{"hardlinks"}, 1);
 
 
 my @inode = get_rows($dbh->prepare("SELECT
