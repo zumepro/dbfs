@@ -11,7 +11,7 @@ integration_testing = []
 
 [dependencies]
 futures = "0.3.31"
-sqlx = { version = "0.8.2", features = ["mysql", "runtime-tokio"] }
+sqlx = { version = "0.8.2", features = ["chrono", "mysql", "runtime-tokio"] }
 tokio = { version = "1.40.0", features = ["full"] }
 argp = "0.3.0"
 fuser = "0.14.0"

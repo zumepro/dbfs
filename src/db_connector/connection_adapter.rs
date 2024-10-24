@@ -17,11 +17,15 @@ use sqlx::{FromRow, MySql, MySqlPool, Pool};
 /// # Supported datatypes
 /// Automatic conversion can be done from the following datatypes: `i32`, `&str`, `String`, `Vec<u8>`
 pub enum DbInputType {
-    Integer(i32),
+    SignedInteger(i32),
+    Integer(u32),
+    BigInteger(u64),
     Char(String),
     Blob(Vec<u8>),
 }
-impl Into<DbInputType> for i32 { fn into(self) -> DbInputType { DbInputType::Integer(self) } }
+impl Into<DbInputType> for i32 { fn into(self) -> DbInputType { DbInputType::SignedInteger(self) } }
+impl Into<DbInputType> for u32 { fn into(self) -> DbInputType { DbInputType::Integer(self) } }
+impl Into<DbInputType> for u64 { fn into(self) -> DbInputType { DbInputType::BigInteger(self) } }
 impl Into<DbInputType> for String { fn into(self) -> DbInputType { DbInputType::Char(self) } }
 impl<'a> Into<DbInputType> for &'a str { fn into(self) -> DbInputType { DbInputType::Char(String::from(self)) } }
 impl Into<DbInputType> for Vec<u8> { fn into(self) -> DbInputType { DbInputType::Blob(self) } }
@@ -37,7 +41,9 @@ macro_rules! prepared_stmt_bind_args {
         if let Some($args) = $args {
             for arg in $args.iter() {
                 $query = match arg {
+                    DbInputType::SignedInteger(val) => $query.bind(val),
                     DbInputType::Integer(val) => $query.bind(val),
+                    DbInputType::BigInteger(val) => $query.bind(val),
                     DbInputType::Char(val) => $query.bind(val),
                     DbInputType::Blob(val) => $query.bind(val),
                 };

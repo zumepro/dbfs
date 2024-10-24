@@ -5,13 +5,27 @@
 
 use std::time::SystemTime;
 
+use super::database_enums;
+
 
 /// Database supported `FileType`s
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileType {
 	File,
 	Directory,
 	Symlink,
+}
+impl TryFrom<database_enums::FileType> for FileType {
+	type Error = super::Error;
+
+	fn try_from(value: database_enums::FileType) -> Result<Self, Self::Error> {
+		Ok(match value {
+			database_enums::FileType::RegularFile => Self::File,
+			database_enums::FileType::SymbolicLink => Self::Symlink,
+			database_enums::FileType::Directory => Self::Directory,
+			database_enums::FileType::Unknown => Err(super::Error::RuntimeError("unknown filetype"))?,
+		})
+	}
 }
 
 
@@ -27,24 +41,25 @@ pub enum FileType {
 ///
 /// # Values in fields
 /// The values in fields in this struct are the sum of all permissions for the user or group.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Permissions {
 	pub owner: u8,
 	pub group: u8,
+	pub other: u8,
 }
 
 
 /// Database supported `FileAttr`ibute
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct FileAttr {
 	/// Inode id
 	pub ino: u32,
 	/// Owner user id
-	pub uid: u64,
+	pub uid: u32,
 	/// Group id
-	pub gid: u64,
+	pub gid: u32,
 	/// Number of hardlinks
-	pub hardlinks: u64,
+	pub hardlinks: u32,
 	/// Filesize in bytes
 	pub bytes: u64,
 	/// Filesize in blocks (4096) - rounded up

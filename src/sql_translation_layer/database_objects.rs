@@ -1,21 +1,33 @@
-use crate::db_connector::FromRow;
+use crate::db_connector::{FromRow, chrono};
+
+
+#[derive(Debug, PartialEq, FromRow, Clone)]
+pub struct FileSize {
+    pub bytes: i64,
+    pub blocks: i64,
+}
+impl Copy for FileSize {}
 
 
 #[derive(Debug, PartialEq, FromRow)]
-pub struct File {
-    pub id: i32,
-    pub name: String,
-    pub inode_id: i32,
+pub struct FileHardlinks {
+    pub hardlinks: i64,
 }
 
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct Inode {
-    pub id: i32,
-    pub mode: Vec<u8>,
-    pub owner: i32,
-    pub group: i32,
-    pub size: i32,
+    pub id: u32,
+    pub owner: u32,
+    pub group: u32,
+    pub file_type: String,
+    pub special_bits: u8,
+    pub user_perm: u8,
+    pub group_perm: u8,
+    pub other_perm: u8,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub modified_at: chrono::DateTime<chrono::Utc>,
+    pub accessed_at: chrono::DateTime<chrono::Utc>,
 }
 
 
@@ -24,25 +36,4 @@ pub struct Block {
     pub inode_id: i32,
     pub block_id: i32,
     pub data: Vec<u8>,
-}
-
-
-#[derive(Debug, PartialEq, FromRow)]
-pub struct Listing {
-    pub parent_file_id: i32,
-    pub child_file_id: i32,
-}
-
-
-#[derive(Debug, PartialEq, FromRow)]
-pub struct User {
-    pub id: i32,
-    pub name: String,
-}
-
-
-#[derive(Debug, PartialEq, FromRow)]
-pub struct Group {
-    pub id: i32,
-    pub name: String,
 }

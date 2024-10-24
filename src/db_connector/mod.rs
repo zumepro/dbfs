@@ -1,4 +1,4 @@
-pub use sqlx::FromRow;
+pub use sqlx::{FromRow, types::chrono};
 use tokio::runtime::Builder;
 
 

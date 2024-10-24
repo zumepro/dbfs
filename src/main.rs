@@ -6,9 +6,15 @@ pub mod fuse_driver;
 
 
 fn main() {
-	let args = cmd_args::parse();
-	let tl = sql_translation_layer::TranslationLayer::new();
-	fuse_driver::run_forever(tl, &args.mountpoint);
+    let args = cmd_args::parse();
+    let tl = match sql_translation_layer::TranslationLayer::new() {
+	Ok(val) => val,
+	Err(err) => {
+	    eprintln!("{}", err);
+	    return;
+	}
+    };
+    fuse_driver::run_forever(tl, &args.mountpoint);
 }
 
 
