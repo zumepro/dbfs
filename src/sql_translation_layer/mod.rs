@@ -98,6 +98,12 @@ impl TranslationLayer {
 	}
 
 
+	/// TODO: Change to Vec<(u64, [`driver_objects::FileType`], [`OsString`])
+	///
+	/// # Returns
+	/// 1. `u64` - Inode number of the child file
+	/// 2. [`driver_objects::FileType`] - Type of the child object
+	/// 3. [`OsString`] - Name of the child file
 	pub fn readdir(&mut self, _inode: u64, _offset: u64) -> Result<Option<(u64, fuser::FileType, OsString)>, Error> {
 		Err(Error::Unimplemented)
 	}
