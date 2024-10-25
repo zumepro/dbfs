@@ -8,12 +8,18 @@ use std::ffi::OsStr;
 use std::time::Duration;
 
 struct DbfsDriver {
-	tl: TranslationLayer
+	tl: TranslationLayer,
+	last_readdir_inode: u64,
+	last_readdir: Vec<driver_objects::DirectoryEntry>
 }
 
 impl DbfsDriver {
 	fn new(tl: TranslationLayer) -> Self {
-		Self { tl }
+		Self {
+			tl,
+			last_readdir_inode: u64::MAX,
+			last_readdir: Vec::new()
+		}
 	}
 }
 
@@ -101,22 +107,27 @@ impl fuser::Filesystem for DbfsDriver {
 		offset: i64,
 		mut reply: fuser::ReplyDirectory,
 	) {
-		let mut i = offset;
-		
-		loop {
-			let entry = match self.tl.readdir(inode, i as u64) {
-				Ok(entry) => match entry {
-					Some(entry) => entry,
-					None => break
-				},
+		if inode != self.last_readdir_inode {
+			self.last_readdir_inode = inode;
+			self.last_readdir = match self.tl.readdir(inode) {
+				Ok(val) => val,
 				Err(_) => {
 					reply.error(ENOENT);
 					return
 				}
+			}
+		}
+
+		let mut i = offset;
+
+		loop {
+			let entry = match self.last_readdir.get(i as usize) {
+				Some(val) => val,
+				None => break
 			};
 
 			i += 1;
-			if reply.add(entry.0, i, entry.1, entry.2) {
+			if reply.add(entry.inode, i, entry.ftype.clone().into(), &entry.name) {
 				break
 			}
 		}

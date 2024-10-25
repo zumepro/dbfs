@@ -8,8 +8,8 @@ const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert
 
 
 use database_objects::{FileHardlinks, FileSize, Inode};
-use fuser;
-use std::{ffi::OsString, sync::Mutex};
+use driver_objects::DirectoryEntry;
+use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
 
 
@@ -98,13 +98,7 @@ impl TranslationLayer {
 	}
 
 
-	/// TODO: Change to Vec<(u64, [`driver_objects::FileType`], [`OsString`])
-	///
-	/// # Returns
-	/// 1. `u64` - Inode number of the child file
-	/// 2. [`driver_objects::FileType`] - Type of the child object
-	/// 3. [`OsString`] - Name of the child file
-	pub fn readdir(&mut self, _inode: u64, _offset: u64) -> Result<Option<(u64, fuser::FileType, OsString)>, Error> {
+	pub fn readdir(&mut self, _inode: u64) -> Result<Vec<DirectoryEntry>, Error> {
 		Err(Error::Unimplemented)
 	}
 

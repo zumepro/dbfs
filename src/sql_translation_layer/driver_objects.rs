@@ -3,13 +3,14 @@
 //! These objects contain **only values extracted from the database** in the appropriate format.
 
 
+use std::ffi::OsString;
 use std::time::SystemTime;
 
 use super::database_enums;
 
 
 /// Database supported `FileType`s
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FileType {
 	File,
 	Directory,
@@ -26,6 +27,14 @@ impl TryFrom<database_enums::FileType> for FileType {
 			database_enums::FileType::Unknown => Err(super::Error::RuntimeError("unknown filetype"))?,
 		})
 	}
+}
+
+
+/// Directory entry structure, returned by the driver when processing a `readdir` request.
+pub struct DirectoryEntry {
+	pub inode: u64,
+	pub ftype: FileType,
+	pub name: OsString
 }
 
 
