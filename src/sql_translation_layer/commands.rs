@@ -20,3 +20,7 @@ pub const SQL_LIST_DIRECTORY: &'static str = r#"WITH `file_info` AS (SELECT `nam
     `inode_id`,
     (SELECT `file_type` FROM `inode` WHERE `id` = `file_info`.`inode_id`) AS `file_type`
 FROM `file_info`"#;
+
+
+pub const SQL_GET_DIRECTORY_PARENT: &'static str = r#"SELECT `parent_inode_id` FROM `file` WHERE `inode_id` = ?"#;
+

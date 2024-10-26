@@ -37,3 +37,10 @@ pub struct DirectoryEntry {
 	pub inode_id: u32,
 	pub file_type: String,
 }
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct DirectoryParent {
+	pub parent_inode_id: u32
+}
+
