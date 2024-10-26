@@ -31,6 +31,7 @@ impl TryFrom<database_enums::FileType> for FileType {
 
 
 /// Directory entry structure, returned by the driver when processing a `readdir` request.
+#[derive(Debug, PartialEq)]
 pub struct DirectoryEntry {
 	pub inode: u64,
 	pub ftype: FileType,

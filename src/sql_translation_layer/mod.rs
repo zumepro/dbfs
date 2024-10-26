@@ -4,11 +4,11 @@ pub mod driver_objects;
 mod commands;
 
 
+const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's u64 to i32 for the driver";
 
 
 use database_objects::{FileHardlinks, FileSize, Inode};
-use driver_objects::DirectoryEntry;
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
 
@@ -56,7 +56,7 @@ impl TranslationLayer {
 	/// # Warnings
 	/// This is a relatively expensive operation, so use as sparingly as possible.
 	pub fn getattr(&mut self, _inode: u64) -> Result<driver_objects::FileAttr, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError("mutex lock error"))?;
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 		let inode: Vec<Inode> = conn.query(commands::SQL_GET_INODE, Some(&vec![_inode.into()]))?;
 		let Some(inode) = inode.get(0) else {
 			return Err(Error::RuntimeError("no inode found with given id"));
@@ -98,8 +98,20 @@ impl TranslationLayer {
 	}
 
 
-	pub fn readdir(&mut self, _inode: u64) -> Result<Vec<DirectoryEntry>, Error> {
-		Err(Error::Unimplemented)
+	/// List a directory by inode id
+	///
+	/// # Warning
+	///
+	/// This function DOES NOT check if the given `_inode` id belongs to a directory (or a
+	/// different filetype).
+	pub fn readdir(&mut self, _inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![_inode.into()]))?;
+		Ok(listing.iter().map(|val| -> Result<driver_objects::DirectoryEntry, Error> { Ok(driver_objects::DirectoryEntry {
+			inode: val.inode_id.into(),
+			ftype: <&String as Into<database_enums::FileType>>::into(&val.file_type).try_into()?,
+			name: val.name.clone().into(),
+		})}).collect::<Result<Vec<driver_objects::DirectoryEntry>, Error>>()?)
 	}
 
 
@@ -173,5 +185,15 @@ mod test {
 			kind: driver_objects::FileType::File,
 			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
 		});
+	}
+
+	#[test]
+	fn listdir_root() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let listing = sql.readdir(1).unwrap();
+		assert_eq!(listing, vec![
+			driver_objects::DirectoryEntry { inode: 2, ftype: driver_objects::FileType::File, name: "test.txt".into() },
+			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() }
+		]);
 	}
 }

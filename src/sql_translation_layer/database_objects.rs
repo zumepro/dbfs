@@ -32,8 +32,8 @@ pub struct Inode {
 
 
 #[derive(Debug, PartialEq, FromRow)]
-pub struct Block {
-    pub inode_id: i32,
-    pub block_id: i32,
-    pub data: Vec<u8>,
+pub struct DirectoryEntry {
+	pub name: String,
+	pub inode_id: u32,
+	pub file_type: String,
 }
