@@ -1,5 +1,6 @@
 use crate::sql_translation_layer::driver_objects;
 use crate::sql_translation_layer::{TranslationLayer, driver_objects::FileAttr};
+use crate::debug;
 
 use fuser;
 use libc::ENOENT;
@@ -68,16 +69,30 @@ const TTL: Duration = Duration::from_secs(1);
 
 impl fuser::Filesystem for DbfsDriver {
 	fn lookup(&mut self, _req: &fuser::Request, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEntry) {
+		debug!("lookup: inode {}, name {:?}", parent_inode, name);
 		match self.tl.lookup(name, parent_inode) {
-			Ok(attr) => reply.entry(&TTL, &attr.into(), 0),
-			Err(_) => reply.error(ENOENT)
+			Ok(attr) => {
+				debug!(" -> OK: {:?}", &attr);
+				reply.entry(&TTL, &attr.into(), 0);
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+			}
 		}
 	}
 
 	fn getattr(&mut self, _req: &fuser::Request, inode: u64, reply: fuser::ReplyAttr) {
+		debug!("getattr: inode {}", inode);
 		match self.tl.getattr(inode) {
-			Ok(attr) => reply.attr(&TTL, &attr.into()),
-			Err(_) => reply.error(ENOENT)
+			Ok(attr) => {
+				debug!(" -> OK: {:?}", &attr);
+				reply.attr(&TTL, &attr.into());
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+			}
 		}
 	}
 
@@ -92,10 +107,17 @@ impl fuser::Filesystem for DbfsDriver {
 		_lock: Option<u64>,
 		reply: fuser::ReplyData,
 	) {
+		debug!("read: inode {}, offset {}, size {}", inode, offset, size);
 		let mut buf = vec![0u8; size as usize];
 		match self.tl.read(inode, offset as u64, &mut buf) {
-			Ok(()) => reply.data(&buf),
-			Err(_) => reply.error(ENOENT)
+			Ok(()) => {
+				debug!(" -> OK");
+				reply.data(&buf);
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+			}
 		}
 	}
 
@@ -107,11 +129,17 @@ impl fuser::Filesystem for DbfsDriver {
 		offset: i64,
 		mut reply: fuser::ReplyDirectory,
 	) {
+		debug!("readdir: inode {}, offset {}", inode, offset);
 		if inode != self.last_readdir_inode {
+			debug!(" -> cache miss, fetching from DB");
 			self.last_readdir_inode = inode;
 			self.last_readdir = match self.tl.readdir(inode) {
-				Ok(val) => val,
-				Err(_) => {
+				Ok(val) => {
+					debug!(" -> OK (inode {} has {} entries)", inode, val.len());
+					val
+				},
+				Err(err) => {
+					debug!(" -> Err {:?}", err);
 					reply.error(ENOENT);
 					return
 				}
@@ -126,18 +154,21 @@ impl fuser::Filesystem for DbfsDriver {
 				None => break
 			};
 
+			debug!(" -> sending #{} (inode {}, name {:?}, type {:?})", i, entry.inode, entry.name, entry.ftype);
 			i += 1;
 			if reply.add(entry.inode, i, entry.ftype.clone().into(), &entry.name) {
 				break
 			}
 		}
 
+		debug!(" -> OK");
+
 		reply.ok();
 	}
 }
 
 pub fn run_forever(tl: TranslationLayer, mountpoint: &str) -> ! {
-	let options = vec![fuser::MountOption::RO, fuser::MountOption::FSName("hello".to_string()), fuser::MountOption::AutoUnmount, fuser::MountOption::AllowRoot];
+	let options = vec![fuser::MountOption::RO, fuser::MountOption::FSName("hello".to_string())];
 	let driver = DbfsDriver::new(tl);
 	fuser::mount2(driver, mountpoint, &options).unwrap();
 	panic!("FUSE driver crashed");
