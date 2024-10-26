@@ -93,8 +93,24 @@ impl TranslationLayer {
 	}
 
 
-	pub fn lookup(&mut self, _name: &std::ffi::OsStr, _parent_inode: u64) -> Result<driver_objects::FileAttr, Error> {
-		Err(Error::Unimplemented)
+	/// Get attributes for file
+	///
+	/// # Inputs
+	/// `name: &OsStr` is the name of the file
+	/// `parent_inode: u64` is the inode ID of the file's parent
+	///
+	/// # Warnings
+	/// As this function internally calls getattr, it is also
+	/// a relatively expensive operation, so use as sparingly as possible.
+	pub fn lookup(&mut self, name: &std::ffi::OsStr, parent_inode: u64) -> Result<driver_objects::FileAttr, Error> {
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let inode: Vec<database_objects::InodeLookup> = conn.query(commands::SQL_LOOKUP_INODE_ID, Some(&vec![path.into(), parent_inode.into()]))?;
+		let inode: &database_objects::InodeLookup = inode.get(0).ok_or(Error::RuntimeError("could not read inode ID"))?;
+		drop(conn);
+
+		self.getattr(inode.inode_id.into())
 	}
 
 
@@ -106,7 +122,6 @@ impl TranslationLayer {
 	/// different filetype). Nor does it check whether the parent is a directory.
 	pub fn readdir(&mut self, inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-
 
 		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![inode.into()]))?;
 		let parent: u32 = DbConnector::query::<database_objects::DirectoryParent>(&mut conn, commands::SQL_GET_DIRECTORY_PARENT, Some(&vec![inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not find the parent file on readdir"))?.parent_inode_id;

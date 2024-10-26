@@ -44,3 +44,9 @@ pub struct DirectoryParent {
 	pub parent_inode_id: u32
 }
 
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct InodeLookup {
+	pub inode_id: u32
+}
+
