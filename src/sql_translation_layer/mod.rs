@@ -5,7 +5,7 @@ mod commands;
 
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
-const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's u64 to i32 for the driver";
+const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
 
 
 use database_objects::{FileHardlinks, FileSize, Inode};
