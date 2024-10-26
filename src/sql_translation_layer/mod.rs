@@ -193,7 +193,8 @@ mod test {
 		let listing = sql.readdir(1).unwrap();
 		assert_eq!(listing, vec![
 			driver_objects::DirectoryEntry { inode: 2, ftype: driver_objects::FileType::File, name: "test.txt".into() },
-			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() }
+			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() },
+			driver_objects::DirectoryEntry { inode: 4, ftype: driver_objects::FileType::Directory, name: "more_testing".into() }
 		]);
 	}
 }

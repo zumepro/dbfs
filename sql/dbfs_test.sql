@@ -2,12 +2,6 @@ SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8mb4 */;
-
-
 CREATE TABLE `block` (
   `inode_id` int(10) UNSIGNED NOT NULL,
   `block_id` int(10) UNSIGNED NOT NULL,
@@ -19,19 +13,24 @@ INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
 (3, 1, REPEAT(CHAR(0), 4096)),
 (3, 2, REPEAT(CHAR(0), 4096)),
 (3, 3, REPEAT(CHAR(0), 4096)),
-(3, 4, 0x616161610a);
+(3, 4, 0x616161610a),
+(5, 1, 0x77686174207765726520796f7520657870656374696e670a),
+(6, 1, 0x68747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64517734773957675863510a);
 
 CREATE TABLE `file` (
-  `id` int(10) UNSIGNED NOT NULL,
+  `parent_inode_id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) NOT NULL,
-  `inode_id` int(10) UNSIGNED NOT NULL,
-  `parent_id` int(10) UNSIGNED DEFAULT NULL
+  `inode_id` int(10) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `file` (`id`, `name`, `inode_id`, `parent_id`) VALUES
-(1, '/', 1, NULL),
-(2, 'test.txt', 2, 1),
-(3, 'test.bin', 3, 1);
+INSERT INTO `file` (`parent_inode_id`, `name`, `inode_id`) VALUES
+(1, '/', 1),
+(1, 'test.txt', 2),
+(1, 'test.bin', 3),
+(1, 'more_testing', 4),
+(4, 'partially_private_file.txt', 5),
+(4, 'very_private_file.txt', 6),
+(4, 'empty_file.bin', 7);
 
 CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -69,7 +68,11 @@ CREATE TABLE `inode` (
 INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
 (1, 1, 1, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52'),
 (2, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:54:00', '2024-10-24 17:54:00', '2024-10-24 17:54:00'),
-(3, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:56:34', '2024-10-24 17:57:14', '2024-10-24 17:56:34');
+(3, 2, 2, '-', 0, 6, 4, 4, '2024-10-24 17:56:34', '2024-10-24 17:57:14', '2024-10-24 17:56:34'),
+(4, 2, 2, 'd', 0, 7, 5, 5, '2024-10-26 16:59:30', '2024-10-26 16:59:30', '2024-10-26 16:59:30'),
+(5, 2, 2, '-', 0, 6, 4, 0, '2024-10-26 17:00:19', '2024-10-26 17:00:19', '2024-10-26 17:00:19'),
+(6, 1, 1, '-', 0, 6, 0, 0, '2024-10-26 17:00:47', '2024-10-26 17:00:47', '2024-10-26 17:00:47'),
+(7, 2, 2, '-', 0, 6, 4, 4, '2024-10-26 18:10:32', '2024-10-26 18:10:32', '2024-10-26 18:10:32');
 
 CREATE TABLE `permissions` (
   `id` tinyint(4) UNSIGNED NOT NULL,
@@ -120,9 +123,8 @@ ALTER TABLE `block`
   ADD PRIMARY KEY (`inode_id`,`block_id`);
 
 ALTER TABLE `file`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `file_inode` (`inode_id`),
-  ADD KEY `file_parent` (`parent_id`);
+  ADD PRIMARY KEY (`parent_inode_id`,`name`),
+  ADD KEY `inode_id` (`inode_id`);
 
 ALTER TABLE `file_types`
   ADD PRIMARY KEY (`id`);
@@ -131,14 +133,7 @@ ALTER TABLE `group`
   ADD PRIMARY KEY (`id`);
 
 ALTER TABLE `inode`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `inode_owner` (`owner`),
-  ADD KEY `inode_group` (`group`),
-  ADD KEY `file_type` (`file_type`),
-  ADD KEY `special_bits` (`special_bits`),
-  ADD KEY `user_perm` (`user_perm`),
-  ADD KEY `group_perm` (`group_perm`),
-  ADD KEY `other_perm` (`other_perm`);
+  ADD PRIMARY KEY (`id`);
 
 ALTER TABLE `permissions`
   ADD PRIMARY KEY (`id`);
@@ -150,14 +145,11 @@ ALTER TABLE `user`
   ADD PRIMARY KEY (`id`);
 
 
-ALTER TABLE `file`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
 ALTER TABLE `group`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 ALTER TABLE `inode`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 ALTER TABLE `user`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
@@ -168,7 +160,7 @@ ALTER TABLE `block`
 
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
-  ADD CONSTRAINT `file_parent` FOREIGN KEY (`parent_id`) REFERENCES `file` (`id`);
+  ADD CONSTRAINT `file_parent_inode` FOREIGN KEY (`parent_inode_id`) REFERENCES `inode` (`id`);
 
 ALTER TABLE `inode`
   ADD CONSTRAINT `inode_file_type` FOREIGN KEY (`file_type`) REFERENCES `file_types` (`id`),
@@ -179,7 +171,3 @@ ALTER TABLE `inode`
   ADD CONSTRAINT `inode_special_bits` FOREIGN KEY (`special_bits`) REFERENCES `special_bits` (`id`),
   ADD CONSTRAINT `inode_user_perm` FOREIGN KEY (`user_perm`) REFERENCES `permissions` (`id`);
 COMMIT;
-
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
