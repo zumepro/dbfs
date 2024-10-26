@@ -129,6 +129,7 @@ impl fuser::Filesystem for DbfsDriver {
 		offset: i64,
 		mut reply: fuser::ReplyDirectory,
 	) {
+		// TODO - append "." and ".." to the listing
 		debug!("readdir: inode {}, offset {}", inode, offset);
 		if inode != self.last_readdir_inode {
 			debug!(" -> cache miss, fetching from DB");

@@ -22,16 +22,15 @@ INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
 (3, 4, 0x616161610a);
 
 CREATE TABLE `file` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `name` varchar(255) NOT NULL,
   `inode_id` int(10) UNSIGNED NOT NULL,
-  `parent_id` int(10) UNSIGNED DEFAULT NULL
+  `parent_inode_id` int(10) UNSIGNED NOT NULL,
+  `name` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `file` (`id`, `name`, `inode_id`, `parent_id`) VALUES
-(1, '/', 1, NULL),
-(2, 'test.txt', 2, 1),
-(3, 'test.bin', 3, 1);
+INSERT INTO `file` (`name`, `inode_id`, `parent_inode_id`) VALUES
+('/', 1, 1),
+('test.txt', 2, 1),
+('test.bin', 3, 1);
 
 CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -120,9 +119,7 @@ ALTER TABLE `block`
   ADD PRIMARY KEY (`inode_id`,`block_id`);
 
 ALTER TABLE `file`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `file_inode` (`inode_id`),
-  ADD KEY `file_parent` (`parent_id`);
+  ADD PRIMARY KEY (`inode_id`, `parent_inode_id`);
 
 ALTER TABLE `file_types`
   ADD PRIMARY KEY (`id`);
@@ -150,9 +147,6 @@ ALTER TABLE `user`
   ADD PRIMARY KEY (`id`);
 
 
-ALTER TABLE `file`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
 ALTER TABLE `group`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
@@ -168,7 +162,7 @@ ALTER TABLE `block`
 
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
-  ADD CONSTRAINT `file_parent` FOREIGN KEY (`parent_id`) REFERENCES `file` (`id`);
+  ADD CONSTRAINT `file_parent` FOREIGN KEY (`parent_inode_id`) REFERENCES `inode` (`id`);
 
 ALTER TABLE `inode`
   ADD CONSTRAINT `inode_file_type` FOREIGN KEY (`file_type`) REFERENCES `file_types` (`id`),
