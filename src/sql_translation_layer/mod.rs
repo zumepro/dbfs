@@ -106,31 +106,24 @@ impl TranslationLayer {
 	/// different filetype). Nor does it check whether the parent is a directory.
 	pub fn readdir(&mut self, inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let parent: Vec<database_objects::DirectoryParent> = conn.query(commands::SQL_GET_DIRECTORY_PARENT, Some(&vec![inode.into()]))?;
-		let parent: u32 = parent.get(0).ok_or(Error::RuntimeError("could not determine parent"))?.parent_inode_id;
 
-		let mut entries: Vec<driver_objects::DirectoryEntry> = Vec::new();
-		entries.push(driver_objects::DirectoryEntry {
-			inode,
-			ftype: driver_objects::FileType::Directory,
-			name: ".".into()
-		});
-		entries.push(driver_objects::DirectoryEntry {
-			inode: parent.into(),
-			ftype: driver_objects::FileType::Directory,
-			name: "..".into()
-		});
 
 		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![inode.into()]))?;
-		for entry in &listing {
-			if u64::from(entry.inode_id) == inode { continue; }
+		let parent: u32 = DbConnector::query::<database_objects::DirectoryParent>(&mut conn, commands::SQL_GET_DIRECTORY_PARENT, Some(&vec![inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not find the parent file on readdir"))?.parent_inode_id;
 
-			entries.push(driver_objects::DirectoryEntry {
-				inode: entry.inode_id.into(),
-				ftype: <&String as Into<database_enums::FileType>>::into(&entry.file_type).try_into()?,
-				name: entry.name.clone().into()
-			});
-		}
+		let mut entries = vec![
+			driver_objects::DirectoryEntry {
+				inode,
+				ftype: driver_objects::FileType::Directory,
+				name: ".".into()
+			},
+			driver_objects::DirectoryEntry {
+				inode: parent.into(),
+				ftype: driver_objects::FileType::Directory,
+				name: "..".into()
+			}
+		];
+		entries.append(&mut listing.iter().map(|val| Ok(driver_objects::DirectoryEntry::try_from(val)?)).collect::<Result<Vec<driver_objects::DirectoryEntry>, Error>>()?);
 
 		Ok(entries)
 	}
@@ -213,6 +206,8 @@ mod test {
 		let mut sql = TranslationLayer::new().unwrap();
 		let listing = sql.readdir(1).unwrap();
 		assert_eq!(listing, vec![
+			driver_objects::DirectoryEntry { inode: 1, ftype: driver_objects::FileType::Directory, name: ".".into() },
+			driver_objects::DirectoryEntry { inode: 1, ftype: driver_objects::FileType::Directory, name: "..".into() },
 			driver_objects::DirectoryEntry { inode: 2, ftype: driver_objects::FileType::File, name: "test.txt".into() },
 			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() },
 			driver_objects::DirectoryEntry { inode: 4, ftype: driver_objects::FileType::Directory, name: "more_testing".into() }

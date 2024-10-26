@@ -6,7 +6,7 @@
 use std::ffi::OsString;
 use std::time::SystemTime;
 
-use super::database_enums;
+use super::{database_enums, database_objects};
 
 
 /// Database supported `FileType`s
@@ -36,6 +36,17 @@ pub struct DirectoryEntry {
 	pub inode: u64,
 	pub ftype: FileType,
 	pub name: OsString
+}
+impl TryFrom<&database_objects::DirectoryEntry> for DirectoryEntry {
+	type Error = super::Error;
+
+	fn try_from(value: &database_objects::DirectoryEntry) -> Result<Self, Self::Error> {
+		Ok(Self {
+			inode: value.inode_id.into(),
+			ftype: <&String as Into<database_enums::FileType>>::into(&value.file_type).try_into()?,
+			name: value.name.clone().into(),
+		})
+	}
 }
 
 

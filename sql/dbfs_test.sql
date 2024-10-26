@@ -18,7 +18,6 @@ INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
 (6, 1, 0x68747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64517734773957675863510a);
 
 CREATE TABLE `file` (
-<<<<<<< HEAD
   `parent_inode_id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) NOT NULL,
   `inode_id` int(10) UNSIGNED NOT NULL
@@ -32,17 +31,6 @@ INSERT INTO `file` (`parent_inode_id`, `name`, `inode_id`) VALUES
 (4, 'partially_private_file.txt', 5),
 (4, 'very_private_file.txt', 6),
 (4, 'empty_file.bin', 7);
-=======
-  `inode_id` int(10) UNSIGNED NOT NULL,
-  `parent_inode_id` int(10) UNSIGNED NOT NULL,
-  `name` varchar(255) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO `file` (`name`, `inode_id`, `parent_inode_id`) VALUES
-('/', 1, 1),
-('test.txt', 2, 1),
-('test.bin', 3, 1);
->>>>>>> 640deb7d84899b6c6c2b5287f8fdff8ffc36b998
 
 CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -135,12 +123,8 @@ ALTER TABLE `block`
   ADD PRIMARY KEY (`inode_id`,`block_id`);
 
 ALTER TABLE `file`
-<<<<<<< HEAD
   ADD PRIMARY KEY (`parent_inode_id`,`name`),
   ADD KEY `inode_id` (`inode_id`);
-=======
-  ADD PRIMARY KEY (`inode_id`, `parent_inode_id`);
->>>>>>> 640deb7d84899b6c6c2b5287f8fdff8ffc36b998
 
 ALTER TABLE `file_types`
   ADD PRIMARY KEY (`id`);
@@ -176,11 +160,7 @@ ALTER TABLE `block`
 
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
-<<<<<<< HEAD
   ADD CONSTRAINT `file_parent_inode` FOREIGN KEY (`parent_inode_id`) REFERENCES `inode` (`id`);
-=======
-  ADD CONSTRAINT `file_parent` FOREIGN KEY (`parent_inode_id`) REFERENCES `inode` (`id`);
->>>>>>> 640deb7d84899b6c6c2b5287f8fdff8ffc36b998
 
 ALTER TABLE `inode`
   ADD CONSTRAINT `inode_file_type` FOREIGN KEY (`file_type`) REFERENCES `file_types` (`id`),

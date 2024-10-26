@@ -25,7 +25,7 @@ test_int: _test_db
 
 
 _prepare_run_cont:
-    podman run --detach --name dbfs_intest_db --rm --env MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 -p "127.0.0.1:3306:3306" docker.io/mariadb:latest
+    podman run --detach --name dbfs_intest_db --rm --env MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 -p "[::1]:3306:3306" docker.io/mariadb:latest
 
 _wait_for_container_start:
     @echo "waiting for database socket to open";
