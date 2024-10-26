@@ -69,12 +69,21 @@ impl TranslationLayer {
 		let file_type: database_enums::FileType = (&inode.file_type).into();
 		let file_type: driver_objects::FileType = driver_objects::FileType::try_from(file_type)?;
 
-		let file_size: FileSize = match file_type {
-			driver_objects::FileType::File | driver_objects::FileType::Symlink => match conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![_inode.into()]))?.get(0) {
-				Some(val) => *val,
-				None => FileSize { bytes: 0, blocks: 0 },
-			},
-			driver_objects::FileType::Directory => FileSize { bytes: 0, blocks: 0 },
+
+		let file_size: FileSize = {
+			match file_type {
+				driver_objects::FileType::File | driver_objects::FileType::Symlink => {
+					if let Ok(got_file_size) = conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![_inode.into()])) {
+						match got_file_size.get(0) {
+							Some(val) => *val,
+							None => FileSize { bytes: 0, blocks: 0 },
+						}
+					} else {
+						FileSize { bytes: 0, blocks: 0 }
+					}
+				},
+				driver_objects::FileType::Directory => FileSize { bytes: 0, blocks: 0 },
+			}
 		};
 
 		Ok(driver_objects::FileAttr {
@@ -155,6 +164,7 @@ impl TranslationLayer {
 #[cfg(feature = "integration_testing")]
 #[cfg(test)]
 mod test {
+	use std::ffi::OsString;
 	use sqlx::types::chrono::{DateTime, Local};
 	use super::*;
 
@@ -227,5 +237,43 @@ mod test {
 			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() },
 			driver_objects::DirectoryEntry { inode: 4, ftype: driver_objects::FileType::Directory, name: "more_testing".into() }
 		]);
+	}
+
+	#[test]
+	fn lookup_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let entry = sql.lookup(&OsString::from("test.txt"), 1).unwrap();
+		assert_eq!(entry, driver_objects::FileAttr  {
+			ino: 2,
+			uid: 2,
+			gid: 2,
+			hardlinks: 1,
+			bytes: 14,
+			blocks: 1,
+			atime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
+			mtime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
+			ctime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
+			kind: driver_objects::FileType::File,
+			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+		});
+	}
+
+	#[test]
+	fn lookup_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let entry = sql.lookup(&OsString::from("test.bin"), 1).unwrap();
+		assert_eq!(entry, driver_objects::FileAttr  {
+			ino: 3,
+			uid: 2,
+			gid: 2,
+			hardlinks: 1,
+			bytes: 4096 * 3 + 5,
+			blocks: 4,
+			atime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
+			mtime: "2024-10-24 17:57:14+0000".parse::<DateTime<Local>>().unwrap().into(),
+			ctime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
+			kind: driver_objects::FileType::File,
+			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+		});
 	}
 }
