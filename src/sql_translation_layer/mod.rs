@@ -102,16 +102,37 @@ impl TranslationLayer {
 	///
 	/// # Warning
 	///
-	/// This function DOES NOT check if the given `_inode` id belongs to a directory (or a
-	/// different filetype).
-	pub fn readdir(&mut self, _inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
+	/// This function DOES NOT check if the given `inode` id belongs to a directory (or a
+	/// different filetype). Nor does it check whether the parent is a directory.
+	pub fn readdir(&mut self, inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![_inode.into()]))?;
-		Ok(listing.iter().map(|val| -> Result<driver_objects::DirectoryEntry, Error> { Ok(driver_objects::DirectoryEntry {
-			inode: val.inode_id.into(),
-			ftype: <&String as Into<database_enums::FileType>>::into(&val.file_type).try_into()?,
-			name: val.name.clone().into(),
-		})}).collect::<Result<Vec<driver_objects::DirectoryEntry>, Error>>()?)
+		let parent: Vec<database_objects::DirectoryParent> = conn.query(commands::SQL_GET_DIRECTORY_PARENT, Some(&vec![inode.into()]))?;
+		let parent: u32 = parent.get(0).ok_or(Error::RuntimeError("could not determine parent"))?.parent_inode_id;
+
+		let mut entries: Vec<driver_objects::DirectoryEntry> = Vec::new();
+		entries.push(driver_objects::DirectoryEntry {
+			inode,
+			ftype: driver_objects::FileType::Directory,
+			name: ".".into()
+		});
+		entries.push(driver_objects::DirectoryEntry {
+			inode: parent.into(),
+			ftype: driver_objects::FileType::Directory,
+			name: "..".into()
+		});
+
+		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![inode.into()]))?;
+		for entry in &listing {
+			if u64::from(entry.inode_id) == inode { continue; }
+
+			entries.push(driver_objects::DirectoryEntry {
+				inode: entry.inode_id.into(),
+				ftype: <&String as Into<database_enums::FileType>>::into(&entry.file_type).try_into()?,
+				name: entry.name.clone().into()
+			});
+		}
+
+		Ok(entries)
 	}
 
 
