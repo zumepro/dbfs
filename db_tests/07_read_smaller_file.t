@@ -18,7 +18,7 @@ sub get_rows {
 }
 
 
-my $dbh = DBI->connect("DBI:mysql:database=dbfs;host=[::1]:3306", "dbfs", "dbfs");
+my $dbh = DBI->connect("DBI:mysql:database=dbfs;host=127.0.0.1:3306", "dbfs", "dbfs");
 isnt($dbh, 0);
 
 
