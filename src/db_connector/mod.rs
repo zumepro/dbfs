@@ -148,7 +148,7 @@ mod test {
     fn test_run_command() {
         let mut conn = DbConnector::default().unwrap();
         let result = conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()]));
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(1));
     }
 
 
