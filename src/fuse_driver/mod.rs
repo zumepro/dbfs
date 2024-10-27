@@ -127,8 +127,8 @@ impl fuser::Filesystem for DbfsDriver {
 
 		let mut buf = vec![0u8; size as usize];
 		match self.tl.read(inode, offset as u64, &mut buf) {
-			Ok(()) => {
-				debug!(" -> OK");
+			Ok(read_bytes) => {
+				debug!(" -> OK (read {})", read_bytes);
 				reply.data(&buf);
 			},
 			Err(err) => {

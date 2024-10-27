@@ -87,3 +87,13 @@ pub const SQL_LOOKUP_INODE_ID: &'static str = r#"SELECT `inode_id` FROM `file` W
 pub const SQL_GET_FS_STAT: &'static str = r#"SELECT
 (SELECT COUNT(*) FROM `inode`) AS `used_inodes`,
 (SELECT COUNT(*) FROM `block`) AS `used_blocks`"#;
+
+
+/// # Binds
+/// - `inode_id`
+/// - `max_blocks`
+/// - `offset_blocks`
+///
+/// # Columns
+/// - `data`
+pub const SQL_READ_FILE: &'static str = r#"SELECT `data` FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` ASC LIMIT ? OFFSET ?"#;
