@@ -544,7 +544,28 @@ impl fuser::Filesystem for DbfsDriver {
 		}
 	}
 
-	// TODO - rename
+	fn rename(
+		&mut self,
+		_req: &fuser::Request<'_>,
+		parent_inode: u64,
+		name: &OsStr,
+		new_parent_inode: u64,
+		new_name: &OsStr,
+		_flags: u32,
+		reply: fuser::ReplyEmpty,
+	) {
+		debug!("rename: parent inode {}, name {:?} to parent inode {}, name {:?}", &parent_inode, &name, &new_parent_inode, &new_name);
+
+		if let Err(err) = self.tl.rename(parent_inode, name, new_parent_inode, new_name) {
+			debug!(" -> Err {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		debug!(" -> OK");
+		reply.ok();
+	}
+
 	// TODO - create
 	// TODO - write
 	// TODO - open (?)
