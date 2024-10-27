@@ -88,6 +88,14 @@ pub const SQL_GET_FS_STAT: &'static str = r#"SELECT
 (SELECT COUNT(*) FROM `inode`) AS `used_inodes`,
 (SELECT COUNT(*) FROM `block`) AS `used_blocks`"#;
 
+/// # Binds
+/// - `dest_parent_inode_id`
+/// - `dest_name`
+/// - `src_parent_inode_id`
+/// - `src_name`
+pub const SQL_RENAME_FILE: &'static str = r#"UPDATE `file`
+SET `parent_inode_id` = ?, `name` = ?
+WHERE `parent_inode_id` = ? AND `name` = ?"#;
 
 /// # Binds
 /// - `inode_id`

@@ -15,6 +15,7 @@ pub const BLOCK_SIZE: u32 = 4096;
 pub const MAX_NAME_LEN: u32 = 255;
 
 
+use commands::SQL_RENAME_FILE;
 use database_objects::{FileHardlinks, FileSize, Inode, DirectoryChildrenDirectory};
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
@@ -346,8 +347,17 @@ impl TranslationLayer {
 	/// `src_name: &OsStr` is the name of the file to be moved
 	/// `dest_parent_inode: u64` specifies the file's new parent inode
 	/// `dest_name: &OsStr` is the file's new name
-	pub fn rename(&mut self, _src_parent_inode: u64, _src_name: &std::ffi::OsStr, _dest_parent_inode: u64, _dest_name: &std::ffi::OsStr) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn rename(&mut self, src_parent_inode: u64, src_name: &std::ffi::OsStr, dest_parent_inode: u64, dest_name: &std::ffi::OsStr) -> Result<(), Error> {
+		let src_path = src_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
+
+		match affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("no changes made"))
+		}
 	}
 }
 
