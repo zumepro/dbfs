@@ -1,4 +1,5 @@
 use crate::settings;
+use crate::db_connector::chrono;
 use futures::TryStreamExt;
 use sqlx::{FromRow, MySql, MySqlPool, Pool};
 
@@ -20,8 +21,10 @@ pub enum DbInputType {
     SignedInteger(i32),
     Integer(u32),
     BigInteger(u64),
+	TinyInteger(u8),
     Char(String),
     Blob(Vec<u8>),
+	Timestamp(chrono::DateTime<chrono::Utc>)
 }
 impl Into<DbInputType> for i32 { fn into(self) -> DbInputType { DbInputType::SignedInteger(self) } }
 impl Into<DbInputType> for u32 { fn into(self) -> DbInputType { DbInputType::Integer(self) } }
@@ -29,6 +32,8 @@ impl Into<DbInputType> for u64 { fn into(self) -> DbInputType { DbInputType::Big
 impl Into<DbInputType> for String { fn into(self) -> DbInputType { DbInputType::Char(self) } }
 impl<'a> Into<DbInputType> for &'a str { fn into(self) -> DbInputType { DbInputType::Char(String::from(self)) } }
 impl Into<DbInputType> for Vec<u8> { fn into(self) -> DbInputType { DbInputType::Blob(self) } }
+impl Into<DbInputType> for u8 { fn into(self) -> DbInputType { DbInputType::TinyInteger(self) } }
+impl Into<DbInputType> for chrono::DateTime<chrono::Utc> { fn into(self) -> DbInputType { DbInputType::Timestamp(self) } }
 
 
 #[derive(Debug)]
@@ -44,8 +49,10 @@ macro_rules! prepared_stmt_bind_args {
                     DbInputType::SignedInteger(val) => $query.bind(val),
                     DbInputType::Integer(val) => $query.bind(val),
                     DbInputType::BigInteger(val) => $query.bind(val),
+					DbInputType::TinyInteger(val) => $query.bind(val),
                     DbInputType::Char(val) => $query.bind(val),
                     DbInputType::Blob(val) => $query.bind(val),
+					DbInputType::Timestamp(val) => $query.bind(val)
                 };
             }
         };
