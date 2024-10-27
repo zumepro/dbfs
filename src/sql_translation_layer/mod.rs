@@ -4,6 +4,9 @@ pub mod driver_objects;
 mod commands;
 
 
+use crate::db_connector::chrono;
+
+
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
 
@@ -349,8 +352,25 @@ impl TranslationLayer {
 	/// # Inputs
 	/// `inode: u64` specifies the inode
 	/// `attr: FileSetAttr` sets the inode attributes
-	pub fn setattr(&mut self, _inode: u64, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		Err(Error::Unimplemented)
+	pub fn setattr(&mut self, inode: u64, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
+			attr.uid.into(),
+			attr.gid.into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.atime).into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.mtime).into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.ctime).into(),
+			attr.perm.owner.into(),
+			attr.perm.group.into(),
+			attr.perm.other.into(),
+			inode.into()
+		]))?;
+		drop(conn);
+		if affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
+		}
+		
+		self.getattr(inode)
 	}
 
 
