@@ -376,7 +376,7 @@ mod test {
 			ino: 3,
 			uid: 2,
 			gid: 2,
-			hardlinks: 1,
+			hardlinks: 2,
 			bytes: 4096 * 3 + 5,
 			blocks: 4,
 			atime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
@@ -395,8 +395,10 @@ mod test {
 			driver_objects::DirectoryEntry { inode: 1, ftype: driver_objects::FileType::Directory, name: ".".into() },
 			driver_objects::DirectoryEntry { inode: 1, ftype: driver_objects::FileType::Directory, name: "..".into() },
 			driver_objects::DirectoryEntry { inode: 2, ftype: driver_objects::FileType::File, name: "test.txt".into() },
+			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "hardlink_to_test.bin".into() },
 			driver_objects::DirectoryEntry { inode: 3, ftype: driver_objects::FileType::File, name: "test.bin".into() },
-			driver_objects::DirectoryEntry { inode: 4, ftype: driver_objects::FileType::Directory, name: "more_testing".into() }
+			driver_objects::DirectoryEntry { inode: 4, ftype: driver_objects::FileType::Directory, name: "more_testing".into() },
+			driver_objects::DirectoryEntry { inode: 8, ftype: driver_objects::FileType::Symlink, name: "symlink_to_test.txt".into() }
 		]);
 	}
 
@@ -427,7 +429,7 @@ mod test {
 			ino: 3,
 			uid: 2,
 			gid: 2,
-			hardlinks: 1,
+			hardlinks: 2,
 			bytes: 4096 * 3 + 5,
 			blocks: 4,
 			atime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
@@ -436,5 +438,13 @@ mod test {
 			kind: driver_objects::FileType::File,
 			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
 		});
+	}
+
+	#[test]
+	fn hardlink_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let entry_1 = sql.lookup(&OsString::from("test.bin"), 1).unwrap();
+		let entry_2 = sql.lookup(&OsString::from("hardlink_to_test.bin"), 1).unwrap();
+		assert_eq!(entry_1, entry_2);
 	}
 }

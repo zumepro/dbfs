@@ -36,7 +36,7 @@ is(scalar @counters, 1);
 
 is($counters[0]->{"bytes"}, 4096 * 3 + 5);
 is($counters[0]->{"blocks"}, 4);
-is($counters[0]->{"hardlinks"}, 1);
+is($counters[0]->{"hardlinks"}, 2);
 
 
 my @inode = get_rows($dbh->prepare("SELECT
@@ -78,9 +78,4 @@ is($inode[0]->{"mtime"}, "2024-10-24 17:57:14");
 is($inode[0]->{"atime"}, "2024-10-24 17:56:34");
 
 
-# 16 384
-# 16388
-
-
 done_testing();
-

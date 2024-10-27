@@ -31,19 +31,27 @@ my @listing = get_rows($dbh->prepare("WITH `ino` AS (SELECT '$parent_inode_id' A
     (SELECT `file_type` FROM `inode` WHERE `id` = `file_info`.`inode_id`) AS `file_type`
 FROM `file_info` ORDER BY `inode_id`"));
 
-is(scalar @listing, 3);
+is(scalar @listing, 5);
 
 is($listing[0]->{"name"}, "test.txt");
 is($listing[0]->{"inode_id"}, 2);
 is($listing[0]->{"file_type"}, "-");
 
-is($listing[1]->{"name"}, "test.bin");
+is($listing[1]->{"name"}, "hardlink_to_test.bin");
 is($listing[1]->{"inode_id"}, 3);
 is($listing[1]->{"file_type"}, "-");
 
-is($listing[2]->{"name"}, "more_testing");
-is($listing[2]->{"inode_id"}, 4);
-is($listing[2]->{"file_type"}, "d");
+is($listing[2]->{"name"}, "test.bin");
+is($listing[2]->{"inode_id"}, 3);
+is($listing[2]->{"file_type"}, "-");
+
+is($listing[3]->{"name"}, "more_testing");
+is($listing[3]->{"inode_id"}, 4);
+is($listing[3]->{"file_type"}, "d");
+
+is($listing[4]->{"name"}, "symlink_to_test.txt");
+is($listing[4]->{"inode_id"}, 8);
+is($listing[4]->{"file_type"}, "l");
 
 
 done_testing();
