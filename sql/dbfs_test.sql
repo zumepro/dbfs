@@ -27,13 +27,13 @@ CREATE TABLE `file` (
 INSERT INTO `file` (`parent_inode_id`, `name`, `inode_id`) VALUES
 (1, '/', 1),
 (1, 'test.txt', 2),
-(1, 'test.bin', 3),
 (1, 'hardlink_to_test.bin', 3),
-(1, 'symlink_to_test.txt', 8),
+(1, 'test.bin', 3),
 (1, 'more_testing', 4),
 (4, 'partially_private_file.txt', 5),
 (4, 'very_private_file.txt', 6),
-(4, 'empty_file.bin', 7);
+(4, 'empty_file.bin', 7),
+(1, 'symlink_to_test.txt', 8);
 
 CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -137,7 +137,14 @@ ALTER TABLE `group`
   ADD PRIMARY KEY (`id`);
 
 ALTER TABLE `inode`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `inode_file_type` (`file_type`),
+  ADD KEY `inode_group` (`group`),
+  ADD KEY `inode_group_perm` (`group_perm`),
+  ADD KEY `inode_other_perm` (`other_perm`),
+  ADD KEY `inode_owner` (`owner`),
+  ADD KEY `inode_special_bits` (`special_bits`),
+  ADD KEY `inode_user_perm` (`user_perm`);
 
 ALTER TABLE `permissions`
   ADD PRIMARY KEY (`id`);
@@ -153,14 +160,14 @@ ALTER TABLE `group`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 ALTER TABLE `inode`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 ALTER TABLE `user`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 
 ALTER TABLE `block`
-  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`);
+  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),

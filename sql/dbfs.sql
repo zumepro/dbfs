@@ -73,7 +73,14 @@ ALTER TABLE `group`
   ADD PRIMARY KEY (`id`);
 
 ALTER TABLE `inode`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `inode_file_type` (`file_type`),
+  ADD KEY `inode_group` (`group`),
+  ADD KEY `inode_group_perm` (`group_perm`),
+  ADD KEY `inode_other_perm` (`other_perm`),
+  ADD KEY `inode_owner` (`owner`),
+  ADD KEY `inode_special_bits` (`special_bits`),
+  ADD KEY `inode_user_perm` (`user_perm`);
 
 ALTER TABLE `permissions`
   ADD PRIMARY KEY (`id`);
@@ -96,7 +103,7 @@ ALTER TABLE `user`
 
 
 ALTER TABLE `block`
-  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`);
+  ADD CONSTRAINT `block_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
