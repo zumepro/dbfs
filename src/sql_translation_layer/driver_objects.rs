@@ -100,7 +100,7 @@ pub struct FileAttr {
 
 /// Like `FileAttr`, but used for setting attributes
 ///
-/// Omits `ino`, `hardlinks`, `bytes` and `blocks`, as those fields
+/// Omits `ino`, `hardlinks`, `bytes`, `blocks` and `kind`, as those fields
 /// are not actually modifiable by simply writing to the inode.
 #[derive(Debug, PartialEq)]
 pub struct FileSetAttr {
@@ -114,8 +114,6 @@ pub struct FileSetAttr {
 	pub mtime: SystemTime,
 	/// Time of creation
 	pub ctime: SystemTime,
-	/// Kind of file (see [`FileType`] for more info)
-	pub kind: FileType,
 	/// User + Group permissions (see [`Permissions`] for more info)
 	pub perm: Permissions,
 }
