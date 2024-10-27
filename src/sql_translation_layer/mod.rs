@@ -78,6 +78,36 @@ impl TranslationLayer {
 	}
 
 
+	/// Count the number of references to an inode
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode whose references will be counted
+	///
+	/// # Warnings
+	/// This does not check whether the inode is a regular file or a symlink.
+	pub fn count_hardlinks(&mut self, inode: u64) -> Result<u32, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let hardlinks: Vec<FileHardlinks> = conn.query(commands::SQL_COUNT_HARDLINKS, Some(&vec![inode.into()]))?;
+		let hardlinks = hardlinks.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks;
+		Ok(hardlinks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?)
+	}
+
+
+	/// Count the number of subdirectories contained inside a directory
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the directory's inode whose children will be counted
+	///
+	/// # Warnings
+	/// This does not check whether the inode is a directory.
+	pub fn count_subdirs(&mut self, inode: u64) -> Result<u32, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let subdirs: Vec<DirectoryChildrenDirectory> = conn.query(commands::SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY, Some(&vec![inode.into()]))?;
+		let subdirs = subdirs.get(0).ok_or(Error::RuntimeError("could not count subdirectories"))?.children_dirs;
+		Ok((subdirs + 2).try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?)
+	}
+
+
 	/// Get attributes for file
 	///
 	/// # Inputs
@@ -88,22 +118,19 @@ impl TranslationLayer {
 	pub fn getattr(&mut self, _inode: u64) -> Result<driver_objects::FileAttr, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 		let inode: Vec<Inode> = conn.query(commands::SQL_GET_INODE, Some(&vec![_inode.into()]))?;
+		drop(conn);
+
 		let Some(inode) = inode.get(0) else {
 			return Err(Error::RuntimeError("no inode found with given id"));
 		};
 
 		let file_type: database_enums::FileType = (&inode.file_type).into();
 
-		let hardlinks: i64 = match file_type {
-			database_enums::FileType::RegularFile | database_enums::FileType::SymbolicLink => {
-				DbConnector::query::<FileHardlinks>(&mut conn, commands::SQL_COUNT_HARDLINKS, Some(&vec![_inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks
-			},
-			database_enums::FileType::Directory => {
-				DbConnector::query::<DirectoryChildrenDirectory>(&mut conn, commands::SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY, Some(&vec![_inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not count directory children of type directory"))?.children_dirs
-			}
+		let hardlinks: u32 = match file_type {
+			database_enums::FileType::RegularFile | database_enums::FileType::SymbolicLink => self.count_hardlinks(_inode)?,
+			database_enums::FileType::Directory => self.count_subdirs(_inode)?,
 			database_enums::FileType::Unknown => 0,
 		};
-		drop(conn);
 
 		let file_type: driver_objects::FileType = driver_objects::FileType::try_from(file_type)?;
 
@@ -329,13 +356,38 @@ impl TranslationLayer {
 
 	/// Removes a reference to an inode
 	///
-	/// If the inode has zero references, it will be deleted.
+	/// If the inode has zero references or it is a directory, it will also be deleted.
 	///
 	/// # Inputs
 	/// `parent_inode: u64` specifies the file's parent inode
 	/// `name: &OsStr` is the name of the file to be deleted
-	pub fn unlink(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn unlink(&mut self, parent_inode: u64, name: &std::ffi::OsStr) -> Result<(), Error> {
+		let inode = self.lookup_id(name, parent_inode)?;
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
+		drop(conn);
+		if affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
+		}
+
+		let attr = self.getattr(inode)?;
+		let delete_inode = match (attr.hardlinks, attr.kind) {
+			(0, driver_objects::FileType::File | driver_objects::FileType::Symlink) => true,
+			(_, driver_objects::FileType::Directory) => true,
+			_ => false
+		};
+		if !delete_inode {
+			return Ok(());
+		}
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
+		match affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("could not delete inode"))
+		}
 	}
 
 
@@ -346,8 +398,17 @@ impl TranslationLayer {
 	/// `src_name: &OsStr` is the name of the file to be moved
 	/// `dest_parent_inode: u64` specifies the file's new parent inode
 	/// `dest_name: &OsStr` is the file's new name
-	pub fn rename(&mut self, _src_parent_inode: u64, _src_name: &std::ffi::OsStr, _dest_parent_inode: u64, _dest_name: &std::ffi::OsStr) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn rename(&mut self, src_parent_inode: u64, src_name: &std::ffi::OsStr, dest_parent_inode: u64, dest_name: &std::ffi::OsStr) -> Result<(), Error> {
+		let src_path = src_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
+
+		match affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("no changes made"))
+		}
 	}
 }
 

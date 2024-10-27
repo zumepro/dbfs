@@ -90,6 +90,27 @@ pub const SQL_GET_FS_STAT: &'static str = r#"SELECT
 
 
 /// # Binds
+/// - `dest_parent_inode_id`
+/// - `dest_name`
+/// - `src_parent_inode_id`
+/// - `src_name`
+pub const SQL_RENAME_FILE: &'static str = r#"UPDATE `file`
+SET `parent_inode_id` = ?, `name` = ?
+WHERE `parent_inode_id` = ? AND `name` = ?"#;
+
+
+/// # Binds
+/// - `name`
+/// - `parent_inode_id`
+pub const SQL_DELETE_FILE: &'static str = r#"DELETE FROM `file` WHERE `name` = ? AND `parent_inode_id` = ?"#;
+
+
+/// # Binds
+/// - `id`
+pub const SQL_DELETE_INODE: &'static str = r#"DELETE FROM `inode` WHERE `id` = ?"#;
+
+
+/// # Binds
 /// - `inode_id`
 /// - `max_blocks`
 /// - `offset_blocks`
