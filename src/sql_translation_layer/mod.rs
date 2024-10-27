@@ -186,6 +186,25 @@ impl TranslationLayer {
 	}
 
 
+	/// Count the children of a directory
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode of the desired directory
+	///
+	/// # Warning
+	///
+	/// This function DOES NOT check if the given `inode` id belongs to a directory (or a
+	/// different filetype).
+	pub fn count_children(&mut self, inode: u64) -> Result<u64, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+
+		let count: Vec<database_objects::ChildrenCount> = conn.query(commands::SQL_GET_FS_STAT, Some(&vec![inode.into()]))?;
+		let count: &database_objects::ChildrenCount = count.get(0).ok_or(Error::RuntimeError("could not determine children count"))?;
+
+		Ok(count.count as u64)
+	}
+
+
 	/// Read inode contents
 	///
 	/// If the destination buffer is too large, an error will be returned.
