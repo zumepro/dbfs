@@ -8,6 +8,13 @@ const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connect
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
 
 
+/// Filesystem block size.
+pub const BLOCK_SIZE: u32 = 4096;
+
+/// Maximum allowed file name length. Taken from the `dbfs.sql` init script.
+pub const MAX_NAME_LEN: u32 = 255;
+
+
 use database_objects::{FileHardlinks, FileSize, Inode};
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
@@ -138,6 +145,9 @@ impl TranslationLayer {
 
 	/// List a directory by inode id
 	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode of the desired directory
+	///
 	/// # Warning
 	///
 	/// This function DOES NOT check if the given `inode` id belongs to a directory (or a
@@ -166,7 +176,22 @@ impl TranslationLayer {
 	}
 
 
+	/// Read inode contents
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode which will be read
 	pub fn read(&mut self, _inode: u64, _offset: u64, _buffer: &mut [u8]) -> Result<(), Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Fetch filesystem statistics
+	///
+	/// # Warning
+	/// As the backend is an SQL database, the contents of the `free_blocks` and `free_inodes`
+	/// fields may be completely made up, as the driver assumes that the SQL backend provides
+	/// unlimited resources.
+	pub fn statfs(&mut self) -> Result<driver_objects::FilesystemStat, Error> {
 		Err(Error::Unimplemented)
 	}
 }
