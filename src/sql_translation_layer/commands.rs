@@ -63,6 +63,7 @@ pub const SQL_UPDATE_INODE: &'static str = r#"UPDATE `inode` SET
 `accessed_at` = ?,
 `modified_at` = ?,
 `created_at` = ?,
+`special_bits` = ?,
 `user_perm` = ?,
 `group_perm` = ?,
 `other_perm` = ?

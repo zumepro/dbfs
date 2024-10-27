@@ -377,6 +377,7 @@ impl TranslationLayer {
 			Into::<chrono::DateTime<chrono::Utc>>::into(attr.atime).into(),
 			Into::<chrono::DateTime<chrono::Utc>>::into(attr.mtime).into(),
 			Into::<chrono::DateTime<chrono::Utc>>::into(attr.ctime).into(),
+			attr.perm.special.into(),
 			attr.perm.owner.into(),
 			attr.perm.group.into(),
 			attr.perm.other.into(),
