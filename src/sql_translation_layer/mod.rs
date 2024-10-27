@@ -15,7 +15,7 @@ pub const BLOCK_SIZE: u32 = 4096;
 pub const MAX_NAME_LEN: u32 = 255;
 
 
-use database_objects::{FileHardlinks, FileSize, Inode};
+use database_objects::{FileHardlinks, FileSize, Inode, DirectoryChildrenDirectory};
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
 
@@ -90,14 +90,20 @@ impl TranslationLayer {
 			return Err(Error::RuntimeError("no inode found with given id"));
 		};
 
-		let hardlinks: Vec<FileHardlinks> = conn.query(commands::SQL_COUNT_HARDLINKS, Some(&vec![_inode.into()]))?;
-		drop(conn);
-		let hardlinks: i64 = hardlinks.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks;
-		if hardlinks == 0 { return Err(Error::RuntimeError("found an orphaned inode")); }
-
 		let file_type: database_enums::FileType = (&inode.file_type).into();
-		let file_type: driver_objects::FileType = driver_objects::FileType::try_from(file_type)?;
 
+		let hardlinks: i64 = match file_type {
+			database_enums::FileType::RegularFile | database_enums::FileType::SymbolicLink => {
+				DbConnector::query::<FileHardlinks>(&mut conn, commands::SQL_COUNT_HARDLINKS, Some(&vec![_inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks
+			},
+			database_enums::FileType::Directory => {
+				DbConnector::query::<DirectoryChildrenDirectory>(&mut conn, commands::SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY, Some(&vec![_inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not count directory children of type directory"))?.children_dirs
+			}
+			database_enums::FileType::Unknown => 0,
+		};
+		drop(conn);
+
+		let file_type: driver_objects::FileType = driver_objects::FileType::try_from(file_type)?;
 
 		let file_size = match file_type {
 			driver_objects::FileType::File | driver_objects::FileType::Symlink => {
@@ -331,7 +337,7 @@ mod test {
 
 
 	#[test]
-	fn getattr_dir() {
+	fn getattr_dir_01() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let attr = sql.getattr(1).unwrap();
 		assert_eq!(attr, driver_objects::FileAttr {
@@ -349,6 +355,25 @@ mod test {
 		});
 	}
 
+	#[test]
+	fn getattr_dir_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let attr = sql.getattr(4).unwrap();
+		assert_eq!(attr, driver_objects::FileAttr {
+			ino: 4,
+			uid: 2,
+			gid: 2,
+			hardlinks: 0,
+			bytes: 0,
+			blocks: 0,
+			atime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
+			mtime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
+			ctime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
+			kind: driver_objects::FileType::Directory,
+			perm: driver_objects::Permissions { owner: 7, group: 0, other: 0 },
+		});
+	}
+	
 	#[test]
 	fn getattr_smaller_file() {
 		let mut sql = TranslationLayer::new().unwrap();

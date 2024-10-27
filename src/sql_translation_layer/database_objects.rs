@@ -16,6 +16,12 @@ pub struct FileHardlinks {
 
 
 #[derive(Debug, PartialEq, FromRow)]
+pub struct DirectoryChildrenDirectory {
+    pub children_dirs: i64,
+}
+
+
+#[derive(Debug, PartialEq, FromRow)]
 pub struct Inode {
     pub id: u32,
     pub owner: u32,
@@ -33,33 +39,33 @@ pub struct Inode {
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct DirectoryEntry {
-	pub name: String,
-	pub inode_id: u32,
-	pub file_type: String,
+    pub name: String,
+    pub inode_id: u32,
+    pub file_type: String,
 }
 
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct DirectoryParent {
-	pub parent_inode_id: u32
+    pub parent_inode_id: u32
 }
 
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct InodeLookup {
-	pub inode_id: u32
+    pub inode_id: u32
 }
 
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct FilesystemStat {
-	pub used_blocks: i64,
-	pub used_inodes: i64
+    pub used_blocks: i64,
+    pub used_inodes: i64
 }
 
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct ChildrenCount {
-	pub count: i64
+    pub count: i64
 }
 

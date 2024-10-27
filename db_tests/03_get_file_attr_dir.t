@@ -3,7 +3,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 22;
+use Test::More;
 use DBI;
 
 
@@ -24,20 +24,10 @@ isnt($dbh, 0);
 
 my $inode_id = "1";
 
-
-my @counters = get_rows($dbh->prepare("WITH `ino` AS (SELECT '$inode_id' AS `ino`),
-`file_tmp` (`blocks`) AS (
-    SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)
-) SELECT
-    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
-    `blocks` AS blocks,
-    (SELECT COUNT(*) FROM `file` WHERE `inode_id` = (SELECT `ino` FROM `ino`)) AS `hardlinks`
-FROM `file_tmp`"));
+my @counters = get_rows($dbh->prepare("WITH `ino` AS (SELECT '$inode_id' AS `ino`) SELECT COUNT(*) AS `children_dirs` FROM `inode` WHERE `id` IN (SELECT `inode_id` FROM `file` WHERE `parent_inode_id` = (SELECT `ino` FROM `ino`)) AND `id` != (SELECT `ino` FROM `ino`) AND `file_type` = 'd'"));
 is(scalar @counters, 1);
 
-is($counters[0]->{"bytes"}, undef);
-is($counters[0]->{"blocks"}, 0);
-is($counters[0]->{"hardlinks"}, 1);
+is($counters[0]->{"children_dirs"}, 1);
 
 
 my @inode = get_rows($dbh->prepare("SELECT
