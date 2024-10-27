@@ -48,6 +48,27 @@ impl TranslationLayer {
 	}
 	
 
+	/// Computes the size of a file
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode of the target file
+	///
+	/// # Warnings
+	/// This function DOES NOT check whether the inode actually is a regular file or symlink.
+	pub fn filesize(&mut self, inode: u64) -> Result<driver_objects::FileSize, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let Ok(size) = conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![inode.into()])) else {
+			return Ok(FileSize { bytes: 0, blocks: 0 }.into())
+		};
+		let size = match size.get(0) {
+			Some(val) => *val,
+			None => FileSize { bytes: 0, blocks: 0 }
+		};
+
+		Ok(size.into())
+	}
+
+
 	/// Get attributes for file
 	///
 	/// # Inputs
@@ -63,6 +84,7 @@ impl TranslationLayer {
 		};
 
 		let hardlinks: Vec<FileHardlinks> = conn.query(commands::SQL_COUNT_HARDLINKS, Some(&vec![_inode.into()]))?;
+		drop(conn);
 		let hardlinks: i64 = hardlinks.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks;
 		if hardlinks == 0 { return Err(Error::RuntimeError("found an orphaned inode")); }
 
@@ -70,20 +92,11 @@ impl TranslationLayer {
 		let file_type: driver_objects::FileType = driver_objects::FileType::try_from(file_type)?;
 
 
-		let file_size: FileSize = {
-			match file_type {
-				driver_objects::FileType::File | driver_objects::FileType::Symlink => {
-					if let Ok(got_file_size) = conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![_inode.into()])) {
-						match got_file_size.get(0) {
-							Some(val) => *val,
-							None => FileSize { bytes: 0, blocks: 0 },
-						}
-					} else {
-						FileSize { bytes: 0, blocks: 0 }
-					}
-				},
-				driver_objects::FileType::Directory => FileSize { bytes: 0, blocks: 0 },
-			}
+		let file_size = match file_type {
+			driver_objects::FileType::File | driver_objects::FileType::Symlink => {
+				self.filesize(_inode)?
+			},
+			driver_objects::FileType::Directory => driver_objects::FileSize { bytes: 0, blocks: 0 },
 		};
 
 		Ok(driver_objects::FileAttr {

@@ -96,3 +96,22 @@ pub struct FileAttr {
 	/// User + Group permissions (see [`Permissions`] for more info)
 	pub perm: Permissions,
 }
+
+
+/// File size structure
+#[derive(Debug, PartialEq)]
+pub struct FileSize {
+	/// File size in bytes
+    pub bytes: i64,
+	/// File size in blocks
+    pub blocks: i64,
+}
+impl Into<FileSize> for database_objects::FileSize {
+	fn into(self) -> FileSize {
+	    FileSize {
+			bytes: self.bytes,
+			blocks: self.blocks
+		}
+	}
+}
+
