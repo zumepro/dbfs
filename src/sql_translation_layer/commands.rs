@@ -24,26 +24,26 @@ pub const SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY: &'static str = r#"WITH `ino` AS 
 
 
 /// # Binds
-/// 1. `inode_id`
+/// - `inode_id`
 ///
 /// # Columns
-/// 1. `hardlinks`
+/// - `hardlinks`
 pub const SQL_COUNT_HARDLINKS: &'static str = r#"SELECT COUNT(*) AS `hardlinks` FROM `file` WHERE `inode_id` = ?"#;
 
 
 /// # Binds
-/// 1. `parent_inode_id`
+/// - `parent_inode_id`
 ///
 /// # Columns
-/// 1. `children`
+/// - `children`
 pub const SQL_COUNT_DIRECTORY_CHILDREN: &'static str = r#"SELECT COUNT(*) AS `children` FROM `file` WHERE `parent_inode_id` = ?"#;
 
 
 /// # Binds
-/// 1. `inode_id`
+/// - `inode_id`
 ///
 /// # Columns
-/// _all inode fields_
+/// _all `inode` fields_
 pub const SQL_GET_INODE: &'static str = r#"SELECT * FROM `inode` WHERE `id` = ?"#;
 
 
