@@ -260,9 +260,21 @@ impl fuser::Filesystem for DbfsDriver {
 		}
 	}
 
+	fn unlink(&mut self, _req: &fuser::Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("unlink: parent inode {}, name {:?}", parent, name);
+
+		if let Err(err) = self.tl.unlink(parent, name) {
+			debug!(" -> Err {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		debug!(" -> OK");
+		reply.ok();
+	}
+
 	// TODO - setattr
 	// TODO - mknod
-	// TODO - unlink
 	// TODO - rmdir
 	// TODO - symlink
 	// TODO - rename
