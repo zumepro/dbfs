@@ -28,6 +28,15 @@ impl TryFrom<database_enums::FileType> for FileType {
 		})
 	}
 }
+impl Into<String> for FileType {
+	fn into(self) -> String {
+	    match self {
+			FileType::File => "-".to_string(),
+			FileType::Directory => "d".to_string(),
+			FileType::Symlink => "l".to_string()
+		}
+	}
+}
 
 
 /// Directory entry structure, returned by the driver when processing a `readdir` request.

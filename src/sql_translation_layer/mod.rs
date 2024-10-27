@@ -326,8 +326,21 @@ impl TranslationLayer {
 	/// `name: &OsStr` is the name of the file to be created
 	/// `kind: FileType` sets the inode type
 	/// `attr: FileSetAttr` sets the remaining inode attributes
-	pub fn mknod(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _kind: driver_objects::FileType, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		Err(Error::Unimplemented)
+	pub fn mknod(&mut self, parent_inode: u64, name: &std::ffi::OsStr, kind: driver_objects::FileType, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let inode = conn.command(commands::SQL_CREATE_INODE, Some(&vec![
+			attr.uid.into(),
+			attr.gid.into(),
+			Into::<String>::into(kind).into(),
+			attr.perm.special.into(),
+			attr.perm.owner.into(),
+			attr.perm.group.into(),
+			attr.perm.other.into()
+		]))?.last_insert_id;
+		drop(conn);
+
+		self.link(parent_inode, name, inode)?;
+		self.getattr(inode)
 	}
 
 
@@ -341,13 +354,13 @@ impl TranslationLayer {
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_CREATE_FILE, Some(&vec![
+		let status = conn.command(commands::SQL_CREATE_FILE, Some(&vec![
 			parent_inode.into(),
 			path.into(),
 			dest_inode.into()
 		]))?;
 		drop(conn);
-		match affected {
+		match status.rows_affected {
 			1 => Ok(()),
 			_ => Err(Error::RuntimeError("no changes made"))
 		}
@@ -371,7 +384,7 @@ impl TranslationLayer {
 	/// `attr: FileSetAttr` sets the inode attributes
 	pub fn setattr(&mut self, inode: u64, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
+		let status = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
 			attr.uid.into(),
 			attr.gid.into(),
 			Into::<chrono::DateTime<chrono::Utc>>::into(attr.atime).into(),
@@ -384,7 +397,7 @@ impl TranslationLayer {
 			inode.into()
 		]))?;
 		drop(conn);
-		if affected != 1 {
+		if status.rows_affected != 1 {
 			return Err(Error::RuntimeError("no changes made"));
 		}
 		
@@ -404,9 +417,9 @@ impl TranslationLayer {
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
+		let status = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
 		drop(conn);
-		if affected != 1 {
+		if status.rows_affected != 1 {
 			return Err(Error::RuntimeError("no changes made"));
 		}
 
@@ -421,8 +434,8 @@ impl TranslationLayer {
 		}
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
-		match affected {
+		let status = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
+		match status.rows_affected {
 			1 => Ok(()),
 			_ => Err(Error::RuntimeError("could not delete inode"))
 		}
@@ -441,9 +454,9 @@ impl TranslationLayer {
 		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
+		let status = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
 
-		match affected {
+		match status.rows_affected {
 			1 => Ok(()),
 			_ => Err(Error::RuntimeError("no changes made"))
 		}

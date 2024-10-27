@@ -53,6 +53,7 @@ pub const SQL_GET_INODE: &'static str = r#"SELECT * FROM `inode` WHERE `id` = ?"
 /// - `accessed_at`
 /// - `modified_at`
 /// - `created_at`
+/// - `special_bits`
 /// - `user_perm`
 /// - `group_perm`
 /// - `other_perm`
@@ -68,6 +69,22 @@ pub const SQL_UPDATE_INODE: &'static str = r#"UPDATE `inode` SET
 `group_perm` = ?,
 `other_perm` = ?
 WHERE `id` = ?"#;
+
+
+/// # Binds
+/// - `owner`
+/// - `group`
+/// - `file_type`
+/// - `special_bits`
+/// - `user_perm`
+/// - `group_perm`
+/// - `other_perm`
+///
+/// # Columns
+/// - `id`
+pub const SQL_CREATE_INODE: &'static str = r#"INSERT INTO `inode`
+(`owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`)
+VALUES (?, ?, ?, ?, ?, ?, ?)"#;
 
 
 /// # Binds

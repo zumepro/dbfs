@@ -3,7 +3,7 @@ use tokio::runtime::Builder;
 
 
 use connection_adapter::Adapter;
-pub use connection_adapter::DbInputType;
+pub use connection_adapter::{DbInputType, CommandStatus};
 mod connection_adapter;
 
 
@@ -107,7 +107,7 @@ impl DbConnector {
     /// ```rust
     /// conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).unwrap();
     /// ```
-    pub fn command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, DbConnectorError> {
+    pub fn command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<CommandStatus, DbConnectorError> {
         blockingify!({
             let val = self.adapter.run_command(command, args).await.map_err(|err| DbConnectorError::AdapterError(err))?;
             Ok(val)

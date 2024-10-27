@@ -36,6 +36,12 @@ impl Into<DbInputType> for u8 { fn into(self) -> DbInputType { DbInputType::Tiny
 impl Into<DbInputType> for chrono::DateTime<chrono::Utc> { fn into(self) -> DbInputType { DbInputType::Timestamp(self) } }
 
 
+pub struct CommandStatus {
+	pub rows_affected: u64,
+	pub last_insert_id: u64
+}
+
+
 #[derive(Debug)]
 /// SQL connection adapter.
 pub struct Adapter(Pool<MySql>);
@@ -107,7 +113,7 @@ impl Adapter {
 
     /// Command is a query **without expected response data**. Use `run_query` if data is expected.
     ///
-    /// Will return `Ok(affected_rows: u64)` if the command was executed successfully.
+    /// Will return `Ok(CommandStatus)` if the command was executed successfully.
     ///
     /// Will return `Err(String)` if there was an error while processing the command. The inner
     /// value is either returned directly from the server or contains connection fail info.
@@ -116,11 +122,14 @@ impl Adapter {
     /// ```rust
     /// adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await.unwrap();
     /// ```
-    pub async fn run_command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, String> {
+    pub async fn run_command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<CommandStatus, String> {
         let mut query = sqlx::query(command);
         prepared_stmt_bind_args!(args, query);
         let execution = query.execute(&self.0).await.map_err(|err| format!("{}", err))?;
-        Ok(execution.rows_affected())
+        Ok(CommandStatus {
+			rows_affected: execution.rows_affected(),
+			last_insert_id: execution.last_insert_id()
+		})
     }
 }
 
