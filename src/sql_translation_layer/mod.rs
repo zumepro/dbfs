@@ -27,6 +27,7 @@ pub struct TranslationLayer (Mutex<DbConnector>);
 pub enum Error {
 	DbConnectorError(DbConnectorError),
 	RuntimeError(&'static str),
+	ClientError(&'static str),
 	Unimplemented,
 }
 impl From<DbConnectorError> for Error {
@@ -39,6 +40,7 @@ fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "sql_translation_error: {} (consider running fsck)", match self {
 			Self::DbConnectorError(val) => val.to_string(),
 			Self::RuntimeError(val) => val.to_string(),
+			Self::ClientError(val) => val.to_string(),
 			Self::Unimplemented => "method isn't implemented yet".to_string(),
 		})
 	}
@@ -219,8 +221,32 @@ impl TranslationLayer {
 	/// `inode: u64` is the id of the inode which will be read
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &mut [u8]` is the destination buffer
-	pub fn read(&mut self, _inode: u64, _offset: u64, _buffer: &mut [u8]) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	///
+	/// # Outputs
+	/// Read size or error
+	///
+	/// Besides regular errors this function can return [`Error::ClientError`]`("pointer out of
+	/// range")`
+	pub fn read(&mut self, inode: u64, offset: u64, buffer: &mut [u8]) -> Result<usize, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+
+		let max_bytes = buffer.len();
+		let max_blocks = (max_bytes.div_ceil(4096) + 1_usize) as u64;
+		let offset_blocks = offset / 4096;
+		let offset = offset as usize;
+
+		let blocks: Vec<database_objects::Block> = conn.query(commands::SQL_READ_FILE, Some(&vec![inode.into(), max_blocks.into(), offset_blocks.into()]))?;
+		if blocks.len() == 0 {
+			match max_bytes {
+				0 => { return Ok(0); }
+				_ => { return Err(Error::ClientError("read failed (pointer or size invalid)")); },
+			}
+		}
+		let bytes: Vec<u8> = blocks.iter().flat_map(|inner| inner.data.iter()).skip(offset - (offset_blocks * 4096) as usize).take(max_bytes).map(|val| val.clone()).collect();
+		let read = bytes.len();
+		buffer[..bytes.len()].copy_from_slice(&bytes);
+
+		Ok(read)
 	}
 
 
@@ -471,5 +497,43 @@ mod test {
 		let entry_1 = sql.lookup(&OsString::from("test.bin"), 1).unwrap();
 		let entry_2 = sql.lookup(&OsString::from("hardlink_to_test.bin"), 1).unwrap();
 		assert_eq!(entry_1, entry_2);
+	}
+
+	#[test]
+	fn read_file_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let buffer: &mut [u8] = &mut [0; 14];
+		let read = sql.read(2, 0, buffer).unwrap();
+		assert_eq!(buffer, "Hello, world!\n".as_bytes());
+		assert_eq!(read, 14);
+	}
+
+	#[test]
+	fn read_file_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let buffer: &mut [u8] = &mut [0; 4];
+		let read = sql.read(2, 0, buffer).unwrap();
+		assert_eq!(buffer, "Hell".as_bytes());
+		assert_eq!(read, 4);
+	}
+
+	#[test]
+	fn read_file_03() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let buffer: &mut [u8] = &mut [0; 14];
+		let read = sql.read(2, 4096, buffer);
+		println!("{:?}", read);
+		assert!(match read { Ok(_) => false, Err(Error::ClientError(val)) => { assert_eq!(val.to_string(), "read failed (pointer or size invalid)"); true }, Err(_) => false });
+	}
+
+	#[test]
+	fn read_file_04() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let buffer: &mut [u8] = &mut [0; 4097];
+		let read = sql.read(3, 4096 * 2, buffer).unwrap();
+		let target: &mut [u8] = &mut [0; 4097];
+		target[target.len() - 1] = 'a' as u8;
+		assert_eq!(read, 4097);
+		assert_eq!(buffer, target);
 	}
 }

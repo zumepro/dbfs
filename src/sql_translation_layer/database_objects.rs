@@ -69,3 +69,8 @@ pub struct ChildrenCount {
     pub count: i64
 }
 
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct Block {
+	pub data: Vec<u8>,
+}
