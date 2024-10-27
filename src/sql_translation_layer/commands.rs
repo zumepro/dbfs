@@ -70,6 +70,15 @@ WHERE `id` = ?"#;
 
 
 /// # Binds
+/// - `parent_inode_id`
+/// - `name`
+/// - `inode_id`
+pub const SQL_CREATE_FILE: &'static str = r#"INSERT INTO `file`
+(`parent_inode_id`, `name`, `inode_id`)
+VALUES (?, ?, ?)"#;
+
+
+/// # Binds
 /// - `inode_id`
 ///
 /// # Columns

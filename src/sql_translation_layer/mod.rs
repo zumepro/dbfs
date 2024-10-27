@@ -332,8 +332,20 @@ impl TranslationLayer {
 	/// `parent_inode: u64` specifies the parent inode where the file should be created
 	/// `name: &OsStr` is the name of the file to be created
 	/// `dest_inode: u64` sets the inode to which the new file will be poiting to
-	pub fn link(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _dest_inode: u64) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn link(&mut self, parent_inode: u64, name: &std::ffi::OsStr, dest_inode: u64) -> Result<(), Error> {
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_CREATE_FILE, Some(&vec![
+			parent_inode.into(),
+			path.into(),
+			dest_inode.into()
+		]))?;
+		drop(conn);
+		match affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("no changes made"))
+		}
 	}
 
 
