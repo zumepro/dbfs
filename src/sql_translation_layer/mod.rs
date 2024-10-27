@@ -15,7 +15,6 @@ pub const BLOCK_SIZE: u32 = 4096;
 pub const MAX_NAME_LEN: u32 = 255;
 
 
-use commands::SQL_RENAME_FILE;
 use database_objects::{FileHardlinks, FileSize, Inode, DirectoryChildrenDirectory};
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
@@ -357,13 +356,38 @@ impl TranslationLayer {
 
 	/// Removes a reference to an inode
 	///
-	/// If the inode has zero references, it will be deleted.
+	/// If the inode has zero references or it is a directory, it will also be deleted.
 	///
 	/// # Inputs
 	/// `parent_inode: u64` specifies the file's parent inode
 	/// `name: &OsStr` is the name of the file to be deleted
-	pub fn unlink(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn unlink(&mut self, parent_inode: u64, name: &std::ffi::OsStr) -> Result<(), Error> {
+		let inode = self.lookup_id(name, parent_inode)?;
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
+		drop(conn);
+		if affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
+		}
+
+		let attr = self.getattr(inode)?;
+		let delete_inode = match (attr.hardlinks, attr.kind) {
+			(0, driver_objects::FileType::File | driver_objects::FileType::Symlink) => true,
+			(_, driver_objects::FileType::Directory) => true,
+			_ => false
+		};
+		if !delete_inode {
+			return Ok(());
+		}
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let affected = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
+		match affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("could not delete inode"))
+		}
 	}
 
 
@@ -379,7 +403,7 @@ impl TranslationLayer {
 		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
+		let affected = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
 
 		match affected {
 			1 => Ok(()),
