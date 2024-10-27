@@ -100,7 +100,7 @@ impl Adapter {
 
     /// Command is a query **without expected response data**. Use `run_query` if data is expected.
     ///
-    /// Will return `Ok(())` if the command was executed successfully.
+    /// Will return `Ok(affected_rows: u64)` if the command was executed successfully.
     ///
     /// Will return `Err(String)` if there was an error while processing the command. The inner
     /// value is either returned directly from the server or contains connection fail info.
@@ -109,11 +109,11 @@ impl Adapter {
     /// ```rust
     /// adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await.unwrap();
     /// ```
-    pub async fn run_command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<(), String> {
+    pub async fn run_command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, String> {
         let mut query = sqlx::query(command);
         prepared_stmt_bind_args!(args, query);
-        query.execute(&self.0).await.map_err(|err| format!("{}", err))?;
-        Ok(())
+        let execution = query.execute(&self.0).await.map_err(|err| format!("{}", err))?;
+        Ok(execution.rows_affected())
     }
 }
 
@@ -128,7 +128,7 @@ mod test {
     async fn test_run_command() {
         let mut adpt = Adapter::default().await.unwrap();
         let result = adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await;
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(1));
     }
 
 

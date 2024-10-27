@@ -396,7 +396,7 @@ mod test {
 			mtime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::Directory,
-			perm: driver_objects::Permissions { owner: 7, group: 0, other: 0 },
+			perm: driver_objects::Permissions { owner: 7, group: 5, other: 5 },
 		});
 	}
 	
