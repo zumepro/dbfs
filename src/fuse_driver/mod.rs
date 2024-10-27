@@ -44,7 +44,7 @@ impl Into<u16> for driver_objects::Permissions {
 
 impl Into<driver_objects::Permissions> for u16 {
 	fn into(self) -> driver_objects::Permissions {
-	    driver_objects::Permissions {
+		driver_objects::Permissions {
 			owner: ((self >> 6) & 7) as u8,
 			group: ((self >> 3) & 7) as u8,
 			other: (self & 7) as u8
@@ -139,7 +139,7 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 
 	fn readlink(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyData) {
-	    debug!("readlink: inode {}", &inode);
+		debug!("readlink: inode {}", &inode);
 		let size: u32 = match self.tl.filesize(inode) {
 			Ok(size) => {
 				debug!(" -> size {}", &size.bytes);
@@ -200,7 +200,7 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 
 	fn statfs(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyStatfs) {
-	    debug!("statfs: inode {}", &inode);
+		debug!("statfs: inode {}", &inode);
 
 		let stat = match self.tl.statfs() {
 			Ok(val) => {
@@ -260,7 +260,7 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 
 	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("rmdir: parent inode {}, name {:?}", &parent_inode, &name);
+		debug!("rmdir: parent inode {}, name {:?}", &parent_inode, &name);
 
 		let inode = match self.tl.lookup_id(name, parent_inode) {
 			Ok(inode) => inode,
@@ -290,7 +290,7 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 
 	fn unlink(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("unlink: parent inode {}, name {:?}", &parent_inode, &name);
+		debug!("unlink: parent inode {}, name {:?}", &parent_inode, &name);
 
 		if let Err(err) = self.tl.unlink(parent_inode, name) {
 			debug!(" -> Err {:?}", &err);
@@ -310,7 +310,7 @@ impl fuser::Filesystem for DbfsDriver {
 		new_name: &OsStr,
 		reply: fuser::ReplyEntry,
 	) {
-	    debug!("link: inode {}, new parent inode {}, new name {:?}", &inode, &new_parent_inode, &new_name);
+		debug!("link: inode {}, new parent inode {}, new name {:?}", &inode, &new_parent_inode, &new_name);
 
 		if let Err(err) = self.tl.link(new_parent_inode, new_name, inode) {
 			debug!(" -> Err while creating link: {:?}", &err);
@@ -387,7 +387,80 @@ impl fuser::Filesystem for DbfsDriver {
 		}
 	}
 
-	// TODO - setattr
+	fn setattr(
+		&mut self,
+		_req: &fuser::Request<'_>,
+		inode: u64,
+		mode: Option<u32>,
+		uid: Option<u32>,
+		gid: Option<u32>,
+		size: Option<u64>,
+		atime: Option<fuser::TimeOrNow>,
+		mtime: Option<fuser::TimeOrNow>,
+		ctime: Option<std::time::SystemTime>,
+		_fh: Option<u64>,
+		_crtime: Option<std::time::SystemTime>,
+		_chgtime: Option<std::time::SystemTime>,
+		_bkuptime: Option<std::time::SystemTime>,
+		_flags: Option<u32>,
+		reply: fuser::ReplyAttr,
+	) {
+		debug!("setattr: inode {}", inode);
+
+		let oldattr = match self.tl.getattr(inode) {
+			Ok(attr) => attr,
+			Err(err) => {
+				debug!(" -> Err while fetching old attributes: {:?}", &err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+		debug!(" -> old attr: {:?}", &oldattr);
+
+		if let Some(size) = size {
+			debug!(" -> truncating from {} to {} bytes", &oldattr.bytes, &size);
+			if let Err(err) = self.tl.resize(inode, size) {
+				debug!(" -> Err while truncating: {:?}", &err);
+				reply.error(ENOENT);
+				return
+			}
+		}
+
+		let time = std::time::SystemTime::now();
+		let setattr = driver_objects::FileSetAttr {
+			uid: uid.unwrap_or_else(|| oldattr.uid),
+			gid: gid.unwrap_or_else(|| oldattr.gid),
+			atime: match atime {
+				Some(fuser::TimeOrNow::SpecificTime(val)) => val,
+				Some(fuser::TimeOrNow::Now) => time,
+				None => oldattr.atime
+			},
+			mtime: match mtime {
+				Some(fuser::TimeOrNow::SpecificTime(val)) => val,
+				Some(fuser::TimeOrNow::Now) => time,
+				None => oldattr.mtime
+			},
+			ctime: ctime.unwrap_or_else(|| oldattr.ctime),
+			perm: match mode {
+				Some(val) => (val as u16).into(),
+				None => oldattr.perm
+			}
+		};
+
+		debug!(" -> setting attr to: {:?}", &setattr);
+		let newattr = match self.tl.setattr(inode, setattr) {
+			Ok(attr) => attr,
+			Err(err) => {
+				debug!(" -> Err while setting attributes: {:?}", &err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		debug!(" -> OK: {:?}", &newattr);
+		reply.attr(&TTL, &newattr.into());
+	}
+
 	// TODO - mknod
 	// TODO - rename
 	// TODO - create
