@@ -185,7 +185,11 @@ impl fuser::Filesystem for DbfsDriver {
 		loop {
 			let entry = match self.last_readdir.get(i as usize) {
 				Some(val) => val,
-				None => break
+				None => {
+					// Invalidate the cache
+					self.last_readdir_inode = u64::MAX;
+					break
+				}
 			};
 
 			debug!(" -> sending #{} (inode {}, name {:?}, type {:?})", &i, &entry.inode, &entry.name, &entry.ftype);
