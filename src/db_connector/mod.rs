@@ -99,7 +99,7 @@ impl DbConnector {
 
     /// A command is an SQL query with **no expected response data**.
     /// 
-    /// `Ok(())` is returned on success.
+    /// Will return `Ok(affected_rows: u64)` if the command was executed successfully.
     ///
     /// `Err(DbConnectorError)` is returned on fail.
     ///
@@ -107,10 +107,10 @@ impl DbConnector {
     /// ```rust
     /// conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).unwrap();
     /// ```
-    pub fn command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<(), DbConnectorError> {
+    pub fn command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, DbConnectorError> {
         blockingify!({
-            self.adapter.run_command(command, args).await.map_err(|err| DbConnectorError::AdapterError(err))?;
-            Ok(())
+            let val = self.adapter.run_command(command, args).await.map_err(|err| DbConnectorError::AdapterError(err))?;
+            Ok(val)
         });
     }
 
