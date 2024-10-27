@@ -108,6 +108,13 @@ impl fuser::Filesystem for DbfsDriver {
 		reply: fuser::ReplyData,
 	) {
 		debug!("read: inode {}, offset {}, size {}", inode, offset, size);
+
+		if size == 0 {
+			debug!(" -> OK, no read operation necessary");
+			reply.data(&[]);
+			return
+		}
+
 		let mut buf = vec![0u8; size as usize];
 		match self.tl.read(inode, offset as u64, &mut buf) {
 			Ok(()) => {
@@ -121,6 +128,23 @@ impl fuser::Filesystem for DbfsDriver {
 		}
 	}
 
+	fn readlink(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyData) {
+	    debug!("readlink: inode {}", inode);
+		let size: u32 = match self.tl.filesize(inode) {
+			Ok(size) => {
+				debug!(" -> size {}", size.bytes);
+				size.bytes as u32
+			},
+			Err(err) => {
+				debug!(" -> Err while determining link size: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		self.read(_req, inode, 0, 0, size, 0, None, reply);
+	}
+
 	fn readdir(
 		&mut self,
 		_req: &fuser::Request,
@@ -129,7 +153,6 @@ impl fuser::Filesystem for DbfsDriver {
 		offset: i64,
 		mut reply: fuser::ReplyDirectory,
 	) {
-		// TODO - append "." and ".." to the listing
 		debug!("readdir: inode {}, offset {}", inode, offset);
 		if inode != self.last_readdir_inode {
 			debug!(" -> cache miss, fetching from DB");
@@ -169,7 +192,7 @@ impl fuser::Filesystem for DbfsDriver {
 }
 
 pub fn run_forever(tl: TranslationLayer, mountpoint: &str) -> ! {
-	let options = vec![fuser::MountOption::RO, fuser::MountOption::FSName("hello".to_string())];
+	let options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("hello".to_string())];
 	let driver = DbfsDriver::new(tl);
 	fuser::mount2(driver, mountpoint, &options).unwrap();
 	panic!("FUSE driver crashed");
