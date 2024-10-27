@@ -3,7 +3,7 @@ use tokio::runtime::Builder;
 
 
 use connection_adapter::Adapter;
-pub use connection_adapter::DbInputType;
+pub use connection_adapter::{DbInputType, CommandStatus};
 mod connection_adapter;
 
 
@@ -107,7 +107,7 @@ impl DbConnector {
     /// ```rust
     /// conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).unwrap();
     /// ```
-    pub fn command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<u64, DbConnectorError> {
+    pub fn command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<CommandStatus, DbConnectorError> {
         blockingify!({
             let val = self.adapter.run_command(command, args).await.map_err(|err| DbConnectorError::AdapterError(err))?;
             Ok(val)
@@ -138,7 +138,7 @@ impl DbConnector {
 }
 
 
-#[cfg(feature = "integration_testing")]
+//#[cfg(feature = "integration_testing")]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -148,7 +148,7 @@ mod test {
     fn test_run_command() {
         let mut conn = DbConnector::default().unwrap();
         let result = conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()]));
-        assert_eq!(result, Ok(1));
+        assert_eq!(result, Ok(connection_adapter::CommandStatus { last_insert_id: 0, rows_affected: 1 }));
     }
 
 

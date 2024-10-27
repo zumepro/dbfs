@@ -51,15 +51,14 @@ impl Into<fuser::FileType> for driver_objects::FileType {
 
 impl Into<u16> for driver_objects::Permissions {
 	fn into(self) -> u16 {
-		// TODO - SUID, SGID, sticky bit
-		(self.owner as u16) << 6 | (self.group as u16) << 3 | self.other as u16
+		(self.special as u16) << 9 | (self.owner as u16) << 6 | (self.group as u16) << 3 | self.other as u16
 	}
 }
 
 impl Into<driver_objects::Permissions> for u16 {
 	fn into(self) -> driver_objects::Permissions {
-		// TODO - SUID, SGID, sticky bit
 		driver_objects::Permissions {
+			special: ((self >> 9) & 7) as u8,
 			owner: ((self >> 6) & 7) as u8,
 			group: ((self >> 3) & 7) as u8,
 			other: (self & 7) as u8
@@ -385,7 +384,7 @@ impl fuser::Filesystem for DbfsDriver {
 			atime: time,
 			ctime: time,
 			mtime: time,
-			perm: driver_objects::Permissions { owner: 7, group: 7, other: 7 }
+			perm: driver_objects::Permissions { special: 0, owner: 7, group: 7, other: 7 }
 		};
 
 		let attr = match self.tl.mknod(parent_inode, link_name, driver_objects::FileType::Symlink, attr) {

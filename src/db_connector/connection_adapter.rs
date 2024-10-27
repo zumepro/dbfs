@@ -1,4 +1,5 @@
 use crate::settings;
+use crate::db_connector::chrono;
 use futures::TryStreamExt;
 use sqlx::{FromRow, MySql, MySqlPool, Pool};
 
@@ -20,8 +21,10 @@ pub enum DbInputType {
     SignedInteger(i32),
     Integer(u32),
     BigInteger(u64),
+    TinyInteger(u8),
     Char(String),
     Blob(Vec<u8>),
+    Timestamp(chrono::DateTime<chrono::Utc>)
 }
 impl Into<DbInputType> for i32 { fn into(self) -> DbInputType { DbInputType::SignedInteger(self) } }
 impl Into<DbInputType> for u32 { fn into(self) -> DbInputType { DbInputType::Integer(self) } }
@@ -29,6 +32,15 @@ impl Into<DbInputType> for u64 { fn into(self) -> DbInputType { DbInputType::Big
 impl Into<DbInputType> for String { fn into(self) -> DbInputType { DbInputType::Char(self) } }
 impl<'a> Into<DbInputType> for &'a str { fn into(self) -> DbInputType { DbInputType::Char(String::from(self)) } }
 impl Into<DbInputType> for Vec<u8> { fn into(self) -> DbInputType { DbInputType::Blob(self) } }
+impl Into<DbInputType> for u8 { fn into(self) -> DbInputType { DbInputType::TinyInteger(self) } }
+impl Into<DbInputType> for chrono::DateTime<chrono::Utc> { fn into(self) -> DbInputType { DbInputType::Timestamp(self) } }
+
+
+#[derive(PartialEq, Debug)]
+pub struct CommandStatus {
+    pub rows_affected: u64,
+    pub last_insert_id: u64
+}
 
 
 #[derive(Debug)]
@@ -44,8 +56,10 @@ macro_rules! prepared_stmt_bind_args {
                     DbInputType::SignedInteger(val) => $query.bind(val),
                     DbInputType::Integer(val) => $query.bind(val),
                     DbInputType::BigInteger(val) => $query.bind(val),
+                    DbInputType::TinyInteger(val) => $query.bind(val),
                     DbInputType::Char(val) => $query.bind(val),
                     DbInputType::Blob(val) => $query.bind(val),
+                    DbInputType::Timestamp(val) => $query.bind(val)
                 };
             }
         };
@@ -100,7 +114,7 @@ impl Adapter {
 
     /// Command is a query **without expected response data**. Use `run_query` if data is expected.
     ///
-    /// Will return `Ok(affected_rows: u64)` if the command was executed successfully.
+    /// Will return `Ok(CommandStatus)` if the command was executed successfully.
     ///
     /// Will return `Err(String)` if there was an error while processing the command. The inner
     /// value is either returned directly from the server or contains connection fail info.
@@ -109,11 +123,14 @@ impl Adapter {
     /// ```rust
     /// adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await.unwrap();
     /// ```
-    pub async fn run_command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<u64, String> {
+    pub async fn run_command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<CommandStatus, String> {
         let mut query = sqlx::query(command);
         prepared_stmt_bind_args!(args, query);
         let execution = query.execute(&self.0).await.map_err(|err| format!("{}", err))?;
-        Ok(execution.rows_affected())
+        Ok(CommandStatus {
+            rows_affected: execution.rows_affected(),
+            last_insert_id: execution.last_insert_id()
+        })
     }
 }
 
@@ -128,7 +145,7 @@ mod test {
     async fn test_run_command() {
         let mut adpt = Adapter::default().await.unwrap();
         let result = adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await;
-        assert_eq!(result, Ok(1));
+        assert_eq!(result, Ok(CommandStatus { last_insert_id: 0, rows_affected: 1 }));
     }
 
 

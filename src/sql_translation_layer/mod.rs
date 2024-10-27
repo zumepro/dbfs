@@ -4,6 +4,9 @@ pub mod driver_objects;
 mod commands;
 
 
+use crate::db_connector::chrono;
+
+
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
 const OOB_WRITE: &'static str = "write is possibly out of bounds";
@@ -153,7 +156,12 @@ impl TranslationLayer {
 			mtime: inode.modified_at.into(),
 			ctime: inode.created_at.into(),
 			kind: file_type,
-			perm: driver_objects::Permissions { owner: inode.user_perm, group: inode.group_perm, other: inode.other_perm }
+			perm: driver_objects::Permissions {
+				special: inode.special_bits,
+				owner: inode.user_perm,
+				group: inode.group_perm,
+				other: inode.other_perm
+			}
 		})
 	}
 
@@ -343,9 +351,9 @@ impl TranslationLayer {
 
 		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
 
-		let _affected = conn.command(query.as_str(), Some(&blocks.iter().map(|val| val.data.clone().into()).collect()))?;
+		let _command_status = conn.command(query.as_str(), Some(&blocks.iter().map(|val| val.data.clone().into()).collect()))?;
 
-		//if blocks.len() as u64 != affected { return Err(Error::ClientError(OOB_WRITE)); }
+		//if blocks.len() as u64 != command_status.rows_affected { return Err(Error::ClientError(OOB_WRITE)); }
 
 		Ok(())
 	}
@@ -358,8 +366,21 @@ impl TranslationLayer {
 	/// `name: &OsStr` is the name of the file to be created
 	/// `kind: FileType` sets the inode type
 	/// `attr: FileSetAttr` sets the remaining inode attributes
-	pub fn mknod(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _kind: driver_objects::FileType, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		Err(Error::Unimplemented)
+	pub fn mknod(&mut self, parent_inode: u64, name: &std::ffi::OsStr, kind: driver_objects::FileType, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let inode = conn.command(commands::SQL_CREATE_INODE, Some(&vec![
+			attr.uid.into(),
+			attr.gid.into(),
+			Into::<String>::into(kind).into(),
+			attr.perm.special.into(),
+			attr.perm.owner.into(),
+			attr.perm.group.into(),
+			attr.perm.other.into()
+		]))?.last_insert_id;
+		drop(conn);
+
+		self.link(parent_inode, name, inode)?;
+		self.getattr(inode)
 	}
 
 
@@ -369,8 +390,20 @@ impl TranslationLayer {
 	/// `parent_inode: u64` specifies the parent inode where the file should be created
 	/// `name: &OsStr` is the name of the file to be created
 	/// `dest_inode: u64` sets the inode to which the new file will be poiting to
-	pub fn link(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _dest_inode: u64) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn link(&mut self, parent_inode: u64, name: &std::ffi::OsStr, dest_inode: u64) -> Result<(), Error> {
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let status = conn.command(commands::SQL_CREATE_FILE, Some(&vec![
+			parent_inode.into(),
+			path.into(),
+			dest_inode.into()
+		]))?;
+		drop(conn);
+		match status.rows_affected {
+			1 => Ok(()),
+			_ => Err(Error::RuntimeError("no changes made"))
+		}
 	}
 
 
@@ -389,8 +422,26 @@ impl TranslationLayer {
 	/// # Inputs
 	/// `inode: u64` specifies the inode
 	/// `attr: FileSetAttr` sets the inode attributes
-	pub fn setattr(&mut self, _inode: u64, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		Err(Error::Unimplemented)
+	pub fn setattr(&mut self, inode: u64, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let status = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
+			attr.uid.into(),
+			attr.gid.into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.atime).into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.mtime).into(),
+			Into::<chrono::DateTime<chrono::Utc>>::into(attr.ctime).into(),
+			attr.perm.special.into(),
+			attr.perm.owner.into(),
+			attr.perm.group.into(),
+			attr.perm.other.into(),
+			inode.into()
+		]))?;
+		drop(conn);
+		if status.rows_affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
+		}
+		
+		self.getattr(inode)
 	}
 
 
@@ -406,9 +457,9 @@ impl TranslationLayer {
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
+		let status = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
 		drop(conn);
-		if affected != 1 {
+		if status.rows_affected != 1 {
 			return Err(Error::RuntimeError("no changes made"));
 		}
 
@@ -423,8 +474,8 @@ impl TranslationLayer {
 		}
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
-		match affected {
+		let status = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
+		match status.rows_affected {
 			1 => Ok(()),
 			_ => Err(Error::RuntimeError("could not delete inode"))
 		}
@@ -443,9 +494,9 @@ impl TranslationLayer {
 		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let affected = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
+		let status = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
 
-		match affected {
+		match status.rows_affected {
 			1 => Ok(()),
 			_ => Err(Error::RuntimeError("no changes made"))
 		}
@@ -478,7 +529,7 @@ mod test {
 			mtime: "2024-10-24 17:53:10+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:52:52+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::Directory,
-			perm: driver_objects::Permissions { owner: 7, group: 5, other: 5 },
+			perm: driver_objects::Permissions { special: 0, owner: 7, group: 5, other: 5 },
 		});
 	}
 
@@ -497,7 +548,7 @@ mod test {
 			mtime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::Directory,
-			perm: driver_objects::Permissions { owner: 7, group: 5, other: 5 },
+			perm: driver_objects::Permissions { special: 0, owner: 7, group: 5, other: 5 },
 		});
 	}
 	
@@ -516,7 +567,7 @@ mod test {
 			mtime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -535,7 +586,7 @@ mod test {
 			mtime: "2024-10-24 17:57:14+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -569,7 +620,7 @@ mod test {
 			mtime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -588,7 +639,7 @@ mod test {
 			mtime: "2024-10-24 17:57:14+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 

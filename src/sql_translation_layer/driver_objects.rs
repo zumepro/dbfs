@@ -28,6 +28,15 @@ impl TryFrom<database_enums::FileType> for FileType {
 		})
 	}
 }
+impl Into<String> for FileType {
+	fn into(self) -> String {
+	    match self {
+			FileType::File => "-".to_string(),
+			FileType::Directory => "d".to_string(),
+			FileType::Symlink => "l".to_string()
+		}
+	}
+}
 
 
 /// Directory entry structure, returned by the driver when processing a `readdir` request.
@@ -64,6 +73,7 @@ impl TryFrom<&database_objects::DirectoryEntry> for DirectoryEntry {
 /// The values in fields in this struct are the sum of all permissions for the user or group.
 #[derive(Debug, PartialEq)]
 pub struct Permissions {
+	pub special: u8,
 	pub owner: u8,
 	pub group: u8,
 	pub other: u8,
