@@ -155,7 +155,12 @@ impl TranslationLayer {
 			mtime: inode.modified_at.into(),
 			ctime: inode.created_at.into(),
 			kind: file_type,
-			perm: driver_objects::Permissions { owner: inode.user_perm, group: inode.group_perm, other: inode.other_perm }
+			perm: driver_objects::Permissions {
+				special: inode.special_bits,
+				owner: inode.user_perm,
+				group: inode.group_perm,
+				other: inode.other_perm
+			}
 		})
 	}
 
@@ -470,7 +475,7 @@ mod test {
 			mtime: "2024-10-24 17:53:10+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:52:52+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::Directory,
-			perm: driver_objects::Permissions { owner: 7, group: 5, other: 5 },
+			perm: driver_objects::Permissions { special: 0, owner: 7, group: 5, other: 5 },
 		});
 	}
 
@@ -489,7 +494,7 @@ mod test {
 			mtime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-26 16:59:30+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::Directory,
-			perm: driver_objects::Permissions { owner: 7, group: 5, other: 5 },
+			perm: driver_objects::Permissions { special: 0, owner: 7, group: 5, other: 5 },
 		});
 	}
 	
@@ -508,7 +513,7 @@ mod test {
 			mtime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -527,7 +532,7 @@ mod test {
 			mtime: "2024-10-24 17:57:14+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -561,7 +566,7 @@ mod test {
 			mtime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:54:00+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 
@@ -580,7 +585,7 @@ mod test {
 			mtime: "2024-10-24 17:57:14+0000".parse::<DateTime<Local>>().unwrap().into(),
 			ctime: "2024-10-24 17:56:34+0000".parse::<DateTime<Local>>().unwrap().into(),
 			kind: driver_objects::FileType::File,
-			perm: driver_objects::Permissions { owner: 6, group: 4, other: 4 },
+			perm: driver_objects::Permissions { special: 0, owner: 6, group: 4, other: 4 },
 		});
 	}
 

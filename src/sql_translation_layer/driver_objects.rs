@@ -64,6 +64,7 @@ impl TryFrom<&database_objects::DirectoryEntry> for DirectoryEntry {
 /// The values in fields in this struct are the sum of all permissions for the user or group.
 #[derive(Debug, PartialEq)]
 pub struct Permissions {
+	pub special: u8,
 	pub owner: u8,
 	pub group: u8,
 	pub other: u8,
