@@ -10,8 +10,7 @@ build:
 
 [group("testing")]
 [doc("Run unit tests")]
-test:
-    cargo test
+test: test_int 
 
 
 _test_db:
