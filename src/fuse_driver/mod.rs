@@ -25,6 +25,19 @@ impl DbfsDriver {
 	}
 }
 
+/// Takes the bits masked by 0xF000.
+impl TryInto<driver_objects::FileType> for u32 {
+	type Error = ();
+
+	fn try_into(self) -> Result<driver_objects::FileType, Self::Error> {
+	    match (self >> 12) & 0xF {
+			0x4 => Ok(driver_objects::FileType::Directory),
+			0x8 => Ok(driver_objects::FileType::File),
+			0xA => Ok(driver_objects::FileType::Symlink),
+			_ => Err(())
+		}
+	}
+}
 
 impl Into<fuser::FileType> for driver_objects::FileType {
 	fn into(self) -> fuser::FileType {
@@ -38,12 +51,14 @@ impl Into<fuser::FileType> for driver_objects::FileType {
 
 impl Into<u16> for driver_objects::Permissions {
 	fn into(self) -> u16 {
+		// TODO - SUID, SGID, sticky bit
 		(self.owner as u16) << 6 | (self.group as u16) << 3 | self.other as u16
 	}
 }
 
 impl Into<driver_objects::Permissions> for u16 {
 	fn into(self) -> driver_objects::Permissions {
+		// TODO - SUID, SGID, sticky bit
 		driver_objects::Permissions {
 			owner: ((self >> 6) & 7) as u8,
 			group: ((self >> 3) & 7) as u8,
@@ -240,6 +255,15 @@ impl fuser::Filesystem for DbfsDriver {
 		reply: fuser::ReplyEntry,
 	) {
 		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
+
+		match mode.try_into() {
+			Ok(driver_objects::FileType::Directory) => {},
+			kind @ _ => {
+				debug!(" -> Err - invalid mode, not directory: {:?}", &kind);
+				reply.error(EINVAL);
+				return
+			}
+		};
 
 		let time = std::time::SystemTime::now();
 		let attr = driver_objects::FileSetAttr {
@@ -446,7 +470,19 @@ impl fuser::Filesystem for DbfsDriver {
 			},
 			ctime: ctime.unwrap_or_else(|| oldattr.ctime),
 			perm: match mode {
-				Some(val) => (val as u16).into(),
+				Some(mode) => {
+					match (mode.try_into(), oldattr.kind) {
+						(Ok(driver_objects::FileType::Directory), driver_objects::FileType::Directory) => {},
+						(Ok(driver_objects::FileType::File), driver_objects::FileType::File) => {},
+						(Ok(driver_objects::FileType::Symlink), driver_objects::FileType::Symlink) => {},
+						modes @ _ => {
+							debug!(" -> Err - attempted to change mode from {:?} to {:?}", &modes.0, &modes.1);
+							reply.error(EINVAL);
+							return
+						}
+					}
+					(mode as u16).into()
+				},
 				None => oldattr.perm
 			}
 		};
@@ -465,7 +501,49 @@ impl fuser::Filesystem for DbfsDriver {
 		reply.attr(&TTL, &newattr.into());
 	}
 
-	// TODO - mknod
+	fn mknod(
+		&mut self,
+		req: &fuser::Request<'_>,
+		parent_inode: u64,
+		name: &OsStr,
+		mode: u32,
+		_umask: u32,
+		_rdev: u32,
+		reply: fuser::ReplyEntry,
+	) {
+		debug!("mknod: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
+
+		match mode.try_into() {
+			Ok(driver_objects::FileType::File) => {},
+			kind @ _ => {
+				debug!(" -> Err - invalid mode, not regular file: {:?}", &kind);
+				reply.error(EINVAL);
+				return
+			}
+		};
+
+		let time = std::time::SystemTime::now();
+		let attr = driver_objects::FileSetAttr {
+			uid: req.uid(),
+			gid: req.gid(),
+			atime: time,
+			mtime: time,
+			ctime: time,
+			perm: (mode as u16).into()
+		};
+
+		match self.tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr) {
+			Ok(attr) => {
+				debug!(" -> OK {:?}", &attr);
+				reply.entry(&TTL, &attr.into(), 0);
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", &err);
+				reply.error(ENOENT);
+			}
+		}
+	}
+
 	// TODO - rename
 	// TODO - create
 	// TODO - write
