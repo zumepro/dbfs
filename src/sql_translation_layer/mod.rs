@@ -198,7 +198,7 @@ impl TranslationLayer {
 	pub fn count_children(&mut self, inode: u64) -> Result<u64, Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 
-		let count: Vec<database_objects::ChildrenCount> = conn.query(commands::SQL_GET_FS_STAT, Some(&vec![inode.into()]))?;
+		let count: Vec<database_objects::ChildrenCount> = conn.query(commands::SQL_COUNT_DIRECTORY_CHILDREN, Some(&vec![inode.into()]))?;
 		let count: &database_objects::ChildrenCount = count.get(0).ok_or(Error::RuntimeError("could not determine children count"))?;
 
 		Ok(count.count as u64)
