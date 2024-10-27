@@ -566,8 +566,31 @@ impl fuser::Filesystem for DbfsDriver {
 		reply.ok();
 	}
 
-	// TODO - create
-	// TODO - write
+	fn write(
+		&mut self,
+		_req: &fuser::Request<'_>,
+		inode: u64,
+		_fh: u64,
+		offset: i64,
+		data: &[u8],
+		_write_flags: u32,
+		_flags: i32,
+		_lock_owner: Option<u64>,
+		reply: fuser::ReplyWrite,
+	) {
+		debug!("write: inode {}, offset {}, data len {}", &inode, &offset, &data.len());
+
+		if let Err(err) = self.tl.write(inode, offset as u64, data) {
+			debug!(" -> Err {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		debug!(" -> OK");
+		reply.written(data.len() as u32);
+	}
+
+	// TODO - create (?)
 	// TODO - open (?)
 }
 
