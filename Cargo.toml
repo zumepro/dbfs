@@ -7,7 +7,9 @@ edition = "2021"
 strip = true
 
 [features]
+default = ["debug"]
 integration_testing = []
+debug = []
 
 [dependencies]
 futures = "0.3.31"

@@ -5,7 +5,7 @@ run:
 
 [group("building")]
 build:
-    cargo build --release
+    cargo build --release --no-default-features
 
 
 [group("testing")]
