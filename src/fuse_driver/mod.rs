@@ -37,9 +37,18 @@ impl Into<fuser::FileType> for driver_objects::FileType {
 }
 
 impl Into<u16> for driver_objects::Permissions {
-	/// **REVIEW NEEDED**
 	fn into(self) -> u16 {
 		(self.owner as u16) << 6 | (self.group as u16) << 3 | self.other as u16
+	}
+}
+
+impl Into<driver_objects::Permissions> for u16 {
+	fn into(self) -> driver_objects::Permissions {
+	    driver_objects::Permissions {
+			owner: ((self >> 6) & 7) as u8,
+			group: ((self >> 3) & 7) as u8,
+			other: (self & 7) as u8
+		}
 	}
 }
 
@@ -58,9 +67,9 @@ impl Into<fuser::FileAttr> for driver_objects::FileAttr {
 			nlink: self.hardlinks.into(),
 			uid: self.uid,
 			gid: self.gid,
-			rdev: 0, // REVIEW NEEDED
-			blksize: 4096, // REVIEW NEEDED
-			flags: 0, // REVIEW NEEDED
+			rdev: 0,
+			blksize: 4096,
+			flags: 0,
 		}
 	}
 }
@@ -217,10 +226,42 @@ impl fuser::Filesystem for DbfsDriver {
 			BLOCK_SIZE
 		);
 	}
-	
+
+	fn mkdir(
+		&mut self,
+		req: &fuser::Request<'_>,
+		parent_inode: u64,
+		name: &OsStr,
+		mode: u32,
+		_umask: u32,
+		reply: fuser::ReplyEntry,
+	) {
+		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", parent_inode, name, mode);
+
+		let time = std::time::SystemTime::now();
+		let attr = driver_objects::FileSetAttr {
+			uid: req.uid(),
+			gid: req.gid(),
+			atime: time,
+			mtime: time,
+			ctime: time,
+			perm: (mode as u16).into()
+		};
+
+		match self.tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr) {
+			Ok(attr) => {
+				debug!(" -> OK {:?}", attr);
+				reply.entry(&TTL, &attr.into(), 0);
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+			}
+		}
+	}
+
 	// TODO - setattr
 	// TODO - mknod
-	// TODO - mkdir
 	// TODO - unlink
 	// TODO - rmdir
 	// TODO - symlink
