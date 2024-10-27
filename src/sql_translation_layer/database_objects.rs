@@ -71,6 +71,14 @@ pub struct ChildrenCount {
 
 
 #[derive(Debug, PartialEq, FromRow)]
+pub struct BlockData {
+    pub data: Vec<u8>,
+}
+
+
+#[derive(Debug, PartialEq, FromRow)]
 pub struct Block {
-	pub data: Vec<u8>,
+    pub inode_id: u32,
+    pub block_id: u32,
+    pub data: Vec<u8>,
 }

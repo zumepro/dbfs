@@ -118,3 +118,36 @@ pub const SQL_DELETE_INODE: &'static str = r#"DELETE FROM `inode` WHERE `id` = ?
 /// # Columns
 /// - `data`
 pub const SQL_READ_FILE: &'static str = r#"SELECT `data` FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` ASC LIMIT ? OFFSET ?"#;
+
+
+/// # Binds
+/// - `inode_id`
+/// - `max_blocks`
+/// - `offset_blocks`
+///
+/// # Columns
+/// - `data`
+pub const SQL_GET_FULL_BLOCKS: &'static str = r#"SELECT * FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` ASC LIMIT ? OFFSET ?"#;
+
+
+pub mod dynamic_queries {
+    use crate::sql_translation_layer::database_objects;
+
+
+    /// # Binds
+    /// - `data` _for every block_
+    pub fn sql_write_start(blocks: &Vec<database_objects::Block>) -> String {
+        let mut query = String::with_capacity(500);
+        query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");
+        for block in blocks.iter() {
+            query.push_str(" (");
+            query.push_str(&block.inode_id.to_string());
+            query.push_str(",");
+            query.push_str(&block.block_id.to_string());
+            query.push_str(",?),");
+        }
+        query.pop();
+        query.push_str(" ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
+        query
+    }
+}

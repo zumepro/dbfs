@@ -107,7 +107,7 @@ impl DbConnector {
     /// ```rust
     /// conn.command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).unwrap();
     /// ```
-    pub fn command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, DbConnectorError> {
+    pub fn command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<u64, DbConnectorError> {
         blockingify!({
             let val = self.adapter.run_command(command, args).await.map_err(|err| DbConnectorError::AdapterError(err))?;
             Ok(val)
@@ -127,7 +127,7 @@ impl DbConnector {
     /// ```rust
     /// let rows: Vec<MyStruct> = conn.query("SELECT * FROM `test_prepared` WHERE `id` = ?", Some(&vec![3.into()])).unwrap();
     /// ```
-    pub fn query<T>(&mut self, query: &'static str, args: Option<&Vec<DbInputType>>) -> Result<Vec<T>, DbConnectorError>
+    pub fn query<'a, T>(&mut self, query: &'a str, args: Option<&Vec<DbInputType>>) -> Result<Vec<T>, DbConnectorError>
     where
         T: for<'r> FromRow<'r, sqlx::mysql::MySqlRow>
     {

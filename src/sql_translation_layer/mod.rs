@@ -6,6 +6,7 @@ mod commands;
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
+const OOB_WRITE: &'static str = "write is possibly out of bounds";
 
 
 /// Filesystem block size.
@@ -262,7 +263,7 @@ impl TranslationLayer {
 		let offset_blocks = offset / 4096;
 		let offset = offset as usize;
 
-		let blocks: Vec<database_objects::Block> = conn.query(commands::SQL_READ_FILE, Some(&vec![inode.into(), max_blocks.into(), offset_blocks.into()]))?;
+		let blocks: Vec<database_objects::BlockData> = conn.query(commands::SQL_READ_FILE, Some(&vec![inode.into(), max_blocks.into(), offset_blocks.into()]))?;
 		if blocks.len() == 0 {
 			match max_bytes {
 				0 => { return Ok(0); }
@@ -306,8 +307,47 @@ impl TranslationLayer {
 	/// `inode: u64` is the id of the inode which will be written to
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &[u8]` is the source buffer
-	pub fn write(&mut self, _inode: u64, _offset: u64, _buffer: &[u8]) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+
+		let length = buffer.len();
+		if length == 0 { return Ok(()); }
+		let start_block = (offset / 4096) as usize;
+		let start = offset as usize - start_block * 4096;
+		let end = offset as usize + length - 1;
+		let end_block = (end + 1).div_ceil(4096);
+		let block_count = end_block - start_block;
+
+		let size = match conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![inode.into()])) {
+			Ok(val) => match val.get(0) {
+				Some(val) => *val,
+				None => FileSize { bytes: 0, blocks: 0 }
+			},
+			Err(_) => FileSize { bytes: 0, blocks: 0 }
+		};
+		let db_filesize = size.bytes.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
+		if end >= db_filesize { return Err(Error::ClientError(OOB_WRITE)); }
+
+		let mut blocks: Vec<database_objects::Block> = conn.query(commands::SQL_GET_FULL_BLOCKS, Some(&vec![inode.into(), (block_count as u64).into(), (start_block as u64).into()]))?;
+		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
+
+		let query = commands::dynamic_queries::sql_write_start(&blocks);
+
+		for (current_block, current_inblock_pos, byte) in buffer.iter().enumerate().map(|(idx, val)| {
+			let current_block = (idx + start) / 4096;
+			let current_inblock_pos = idx + start - current_block * 4096;
+			(current_block, current_inblock_pos, val)
+		}) {
+			blocks[current_block].data[current_inblock_pos] = *byte;
+		}
+
+		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
+
+		let _affected = conn.command(query.as_str(), Some(&blocks.iter().map(|val| val.data.clone().into()).collect()))?;
+
+		//if blocks.len() as u64 != affected { return Err(Error::ClientError(OOB_WRITE)); }
+
+		Ok(())
 	}
 
 
@@ -596,5 +636,40 @@ mod test {
 		target[target.len() - 1] = 'a' as u8;
 		assert_eq!(read, 4097);
 		assert_eq!(buffer, target);
+	}
+
+	#[test]
+	fn write_to_file_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let original: &[u8] = &"Hello, world!\n".as_bytes();
+		let buffer: &[u8] = &"Wasup".as_bytes();
+		let _write = sql.write(2, 0, buffer).unwrap();
+		let changed_value: &mut [u8] = &mut [0; 14];
+		let read = sql.read(2, 0, changed_value).unwrap();
+		let _write = sql.write(2, 0, original).unwrap();
+		assert_eq!(read, 14);
+		assert_eq!(changed_value, "Wasup, world!\n".as_bytes());
+	}
+
+	#[test]
+	fn write_to_file_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let original: &mut[u8] = &mut[0; 4096 * 3 + 4];
+		original[4096*3..].copy_from_slice("aaaa".as_bytes());
+		let buffer: &[u8] = &"bbbb".as_bytes();
+		let _write = sql.write(3, 4096 * 3 - 1, buffer).unwrap();
+		let changed_value: &mut [u8] = &mut [0; 7];
+		let read = sql.read(3, 4096 * 3 - 1, changed_value).unwrap();
+		let _write = sql.write(3, 0, original).unwrap();
+		assert_eq!(changed_value, "bbbba\n\0".as_bytes());
+		assert_eq!(read, 6);
+	}
+
+	#[test]
+	fn write_to_file_03() {
+		let mut sql = TranslationLayer::new().unwrap();
+		let buffer: &[u8] = &"bbbb\n".as_bytes();
+		let write = sql.write(3, 4096 * 3 + 1, buffer);
+		assert!(match write { Ok(()) => { eprintln!("returned ok - should have failed"); false}, Err(Error::ClientError(OOB_WRITE)) => true, Err(_) => false });
 	}
 }

@@ -83,7 +83,7 @@ impl Adapter {
     /// ```rust
     /// let rows: Vec<MyStruct> = adpt.run_query("SELECT * FROM `test_prepared` WHERE `id` = ?", Some(&vec![1.into()])).await.unwrap();
     /// ```
-    pub async fn run_query<T>(&mut self, query: &'static str, args: Option<&Vec<DbInputType>>) -> Result<Vec<T>, String>
+    pub async fn run_query<'a, T>(&mut self, query: &'a str, args: Option<&Vec<DbInputType>>) -> Result<Vec<T>, String>
     where 
         T: for<'r> FromRow<'r, sqlx::mysql::MySqlRow>
     {
@@ -109,7 +109,7 @@ impl Adapter {
     /// ```rust
     /// adpt.run_command("INSERT INTO `test` (`id`) VALUES (?)", Some(&vec![42.into()])).await.unwrap();
     /// ```
-    pub async fn run_command(&mut self, command: &'static str, args: Option<&Vec<DbInputType>>) -> Result<u64, String> {
+    pub async fn run_command<'a>(&mut self, command: &'a str, args: Option<&Vec<DbInputType>>) -> Result<u64, String> {
         let mut query = sqlx::query(command);
         prepared_stmt_bind_args!(args, query);
         let execution = query.execute(&self.0).await.map_err(|err| format!("{}", err))?;

@@ -44,8 +44,6 @@ isnt($dbh, 0);
 
 {
     my $inode = "3";
-    my $offset_in_blocks = "0";
-    my $rows = "2";
 
 
     $dbh->do("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
@@ -61,6 +59,34 @@ isnt($dbh, 0);
     $dbh->do("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
         ($inode, 1, REPEAT(CHAR(0), 4096)),
         ($inode, 2, REPEAT(CHAR(0), 4096))
+    ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
+
+    my @test_02 = get_rows($dbh->prepare("SELECT `data` FROM `block` WHERE `inode_id` = '$inode'"));
+    is(scalar @test_01, 4);
+    is($test_02[0]->{"data"}, "\0" x 4096);
+    is($test_02[1]->{"data"}, "\0" x 4096);
+}
+
+
+{
+    my $inode = "3";
+
+
+    $dbh->do("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
+        ($inode, 2, REPEAT(CHAR(2), 4096)),
+        ($inode, 3, REPEAT(CHAR(3), 4096))
+    ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
+
+    my @test_01 = get_rows($dbh->prepare("SELECT `data` FROM `block` WHERE `inode_id` = '$inode'"));
+    is(scalar @test_01, 4);
+    is($test_01[0]->{"data"}, "\0" x 4096);
+    is($test_01[1]->{"data"}, "\2" x 4096);
+    is($test_01[2]->{"data"}, "\3" x 4096);
+    is($test_01[3]->{"data"}, "aaaa\n");
+
+    $dbh->do("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
+        ($inode, 2, REPEAT(CHAR(0), 4096)),
+        ($inode, 3, REPEAT(CHAR(0), 4096))
     ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
 
     my @test_02 = get_rows($dbh->prepare("SELECT `data` FROM `block` WHERE `inode_id` = '$inode'"));
