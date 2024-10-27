@@ -79,38 +79,29 @@ const TTL: Duration = Duration::from_secs(1);
 
 impl fuser::Filesystem for DbfsDriver {
 	fn lookup(&mut self, _req: &fuser::Request, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEntry) {
-		#[cfg(feature = "debug")]
-		debug!("lookup: inode {}, name {:?}", parent_inode, name);
+		debug!("lookup: inode {}, name {:?}", &parent_inode, &name);
 		match self.tl.lookup(name, parent_inode) {
 			Ok(attr) => {
-				#[cfg(feature = "debug")]
 				debug!(" -> OK: {:?}", &attr);
 				reply.entry(&TTL, &attr.into(), 0);
 			},
 			Err(err) => {
-				debug!(" -> Err {:?}", err);
+				debug!(" -> Err {:?}", &err);
 				reply.error(ENOENT);
 			}
 		}
 	}
 
 	fn getattr(&mut self, _req: &fuser::Request, inode: u64, reply: fuser::ReplyAttr) {
-		#[cfg(feature = "debug")]
-		debug!("getattr: inode {}", inode);
+		debug!("getattr: inode {}", &inode);
 		match self.tl.getattr(inode) {
 			Ok(attr) => {
-				#[cfg(feature = "debug")]
 				debug!(" -> OK: {:?}", &attr);
 				reply.attr(&TTL, &attr.into());
 			},
-			#[cfg(feature = "debug")]
 			Err(err) => {
-				debug!(" -> Err {:?}", err);
+				debug!(" -> Err {:?}", &err);
 				reply.error(ENOENT);
-			}
-			#[cfg(not(feature = "debug"))]
-			Err(_) => {
-				reply.error(ENONET);
 			}
 		}
 	}
@@ -126,11 +117,9 @@ impl fuser::Filesystem for DbfsDriver {
 		_lock: Option<u64>,
 		reply: fuser::ReplyData,
 	) {
-		#[cfg(feature = "debug")]
-		debug!("read: inode {}, offset {}, size {}", inode, offset, size);
+		debug!("read: inode {}, offset {}, size {}", &inode, &offset, &size);
 
 		if size == 0 {
-			#[cfg(feature = "debug")]
 			debug!(" -> OK, no read operation necessary");
 			reply.data(&[]);
 			return
@@ -139,41 +128,26 @@ impl fuser::Filesystem for DbfsDriver {
 		let mut buf = vec![0u8; size as usize];
 		match self.tl.read(inode, offset as u64, &mut buf) {
 			Ok(()) => {
-				#[cfg(feature = "debug")]
 				debug!(" -> OK");
 				reply.data(&buf);
 			},
-			#[cfg(feature = "debug")]
 			Err(err) => {
-				debug!(" -> Err {:?}", err);
+				debug!(" -> Err {:?}", &err);
 				reply.error(ENOENT);
-			}
-			#[cfg(not(feature = "debug"))]
-			Err(_) => {
-				reply.error(ENONET);
 			}
 		}
 	}
 
 	fn readlink(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyData) {
-		#[cfg(feature = "debug")]
-	    debug!("readlink: inode {}", inode);
+	    debug!("readlink: inode {}", &inode);
 		let size: u32 = match self.tl.filesize(inode) {
 			Ok(size) => {
-				#[cfg(feature = "debug")]
-				debug!(" -> size {}", size.bytes);
+				debug!(" -> size {}", &size.bytes);
 				size.bytes as u32
 			},
-			#[cfg(feature = "debug")]
 			Err(err) => {
-				#[cfg(feature = "debug")]
-				debug!(" -> Err while determining link size: {:?}", err);
+				debug!(" -> Err while determining link size: {:?}", &err);
 				reply.error(ENOENT);
-				return
-			}
-			#[cfg(not(feature = "debug"))]
-			Err(_) => {
-				reply.error(ENONET);
 				return
 			}
 		};
@@ -189,26 +163,18 @@ impl fuser::Filesystem for DbfsDriver {
 		offset: i64,
 		mut reply: fuser::ReplyDirectory,
 	) {
-		debug!("readdir: inode {}, offset {}", inode, offset);
+		debug!("readdir: inode {}, offset {}", &inode, &offset);
 		if inode != self.last_readdir_inode {
-			#[cfg(feature = "debug")]
 			debug!(" -> cache miss, fetching from DB");
 			self.last_readdir_inode = inode;
 			self.last_readdir = match self.tl.readdir(inode) {
 				Ok(val) => {
-					#[cfg(feature = "debug")]
-					debug!(" -> OK (inode {} has {} entries)", inode, val.len());
+					debug!(" -> OK (inode {} has {} entries)", &inode, &val.len());
 					val
 				},
-				#[cfg(feature = "debug")]
 				Err(err) => {
-					debug!(" -> Err {:?}", err);
+					debug!(" -> Err {:?}", &err);
 					reply.error(ENOENT);
-					return
-				}
-				#[cfg(not(feature = "debug"))]
-				Err(_) => {
-					reply.error(ENONET);
 					return
 				}
 			}
@@ -222,39 +188,28 @@ impl fuser::Filesystem for DbfsDriver {
 				None => break
 			};
 
-			#[cfg(feature = "debug")]
-			debug!(" -> sending #{} (inode {}, name {:?}, type {:?})", i, entry.inode, entry.name, entry.ftype);
+			debug!(" -> sending #{} (inode {}, name {:?}, type {:?})", &i, &entry.inode, &entry.name, &entry.ftype);
 			i += 1;
 			if reply.add(entry.inode, i, entry.ftype.clone().into(), &entry.name) {
 				break
 			}
 		}
 
-		#[cfg(feature = "debug")]
 		debug!(" -> OK");
-
 		reply.ok();
 	}
 
 	fn statfs(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyStatfs) {
-		#[cfg(feature = "debug")]
-	    debug!("statfs: inode {}", inode);
+	    debug!("statfs: inode {}", &inode);
 
 		let stat = match self.tl.statfs() {
 			Ok(val) => {
-				#[cfg(feature = "debug")]
-				debug!(" -> OK {:?}", val);
+				debug!(" -> OK {:?}", &val);
 				val
 			},
-			#[cfg(feature = "debug")]
 			Err(err) => {
-				debug!(" -> Err {:?}", err);
+				debug!(" -> Err {:?}", &err);
 				reply.error(ENOENT);
-				return
-			}
-			#[cfg(not(feature = "debug"))]
-			Err(_) => {
-				reply.error(ENONET);
 				return
 			}
 		};
@@ -280,8 +235,7 @@ impl fuser::Filesystem for DbfsDriver {
 		_umask: u32,
 		reply: fuser::ReplyEntry,
 	) {
-		#[cfg(feature = "debug")]
-		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", parent_inode, name, mode);
+		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
 
 		let time = std::time::SystemTime::now();
 		let attr = driver_objects::FileSetAttr {
@@ -295,29 +249,23 @@ impl fuser::Filesystem for DbfsDriver {
 
 		match self.tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr) {
 			Ok(attr) => {
-				#[cfg(feature = "debug")]
-				debug!(" -> OK {:?}", attr);
+				debug!(" -> OK {:?}", &attr);
 				reply.entry(&TTL, &attr.into(), 0);
 			},
-			#[cfg(feature = "debug")]
 			Err(err) => {
-				debug!(" -> Err {:?}", err);
+				debug!(" -> Err {:?}", &err);
 				reply.error(ENOENT);
-			}
-			#[cfg(not(feature = "debug"))]
-			Err(_) => {
-				reply.error(ENONET);
 			}
 		}
 	}
 
 	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("rmdir: parent inode {}, name {:?}", parent_inode, name);
+	    debug!("rmdir: parent inode {}, name {:?}", &parent_inode, &name);
 
 		let inode = match self.tl.lookup_id(name, parent_inode) {
 			Ok(inode) => inode,
 			Err(err) => {
-				debug!(" -> Err while performing lookup: {:?}", err);
+				debug!(" -> Err while performing lookup: {:?}", &err);
 				reply.error(ENOENT);
 				return
 			}
@@ -326,7 +274,7 @@ impl fuser::Filesystem for DbfsDriver {
 		let children = match self.tl.count_children(inode) {
 			Ok(val) => val,
 			Err(err) => {
-				debug!(" -> Err while counting children: {:?}", err);
+				debug!(" -> Err while counting children: {:?}", &err);
 				reply.error(ENOENT);
 				return
 			}
@@ -342,10 +290,10 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 
 	fn unlink(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("unlink: parent inode {}, name {:?}", parent_inode, name);
+	    debug!("unlink: parent inode {}, name {:?}", &parent_inode, &name);
 
 		if let Err(err) = self.tl.unlink(parent_inode, name) {
-			debug!(" -> Err {:?}", err);
+			debug!(" -> Err {:?}", &err);
 			reply.error(ENOENT);
 			return
 		}
@@ -362,10 +310,10 @@ impl fuser::Filesystem for DbfsDriver {
 		new_name: &OsStr,
 		reply: fuser::ReplyEntry,
 	) {
-	    debug!("link: inode {}, new parent inode {}, new name {:?}", inode, new_parent_inode, new_name);
+	    debug!("link: inode {}, new parent inode {}, new name {:?}", &inode, &new_parent_inode, &new_name);
 
 		if let Err(err) = self.tl.link(new_parent_inode, new_name, inode) {
-			debug!(" -> Err while creating link: {:?}", err);
+			debug!(" -> Err while creating link: {:?}", &err);
 			reply.error(ENOENT);
 			return
 		}
@@ -373,7 +321,7 @@ impl fuser::Filesystem for DbfsDriver {
 		let attr = match self.tl.getattr(inode) {
 			Ok(attr) => attr,
 			Err(err) => {
-				debug!(" -> Err while fetching attributes: {:?}", err);
+				debug!(" -> Err while fetching attributes: {:?}", &err);
 				reply.error(ENOENT);
 				return
 			}
@@ -391,7 +339,7 @@ impl fuser::Filesystem for DbfsDriver {
 		target: &std::path::Path,
 		reply: fuser::ReplyEntry,
 	) {
-		debug!("symlink: parent inode {}, name {:?}, target {:?}", parent_inode, link_name, target);
+		debug!("symlink: parent inode {}, name {:?}, target {:?}", &parent_inode, &link_name, &target);
 
 		let target = match target.to_str() {
 			Some(target) => target.as_bytes(),
@@ -415,14 +363,14 @@ impl fuser::Filesystem for DbfsDriver {
 		let attr = match self.tl.mknod(parent_inode, link_name, driver_objects::FileType::Symlink, attr) {
 			Ok(attr) => attr,
 			Err(err) => {
-				debug!(" -> Err while creating node: {:?}", err);
+				debug!(" -> Err while creating node: {:?}", &err);
 				reply.error(ENOENT);
 				return
 			}
 		};
 
 		if let Err(err) = self.tl.write(attr.ino.into(), 0, target) {
-			debug!(" -> Err while writing symlink data: {:?}", err);
+			debug!(" -> Err while writing symlink data: {:?}", &err);
 			reply.error(ENOENT);
 			return
 		}
@@ -433,7 +381,7 @@ impl fuser::Filesystem for DbfsDriver {
 				reply.entry(&TTL, &attr.into(), 0);
 			},
 			Err(err) => {
-				debug!(" -> Err while fetching updated attributes: {:?}", err);
+				debug!(" -> Err while fetching updated attributes: {:?}", &err);
 				reply.error(ENOENT);
 			}
 		}
