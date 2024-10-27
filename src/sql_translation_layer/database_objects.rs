@@ -50,3 +50,10 @@ pub struct InodeLookup {
 	pub inode_id: u32
 }
 
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct FilesystemStat {
+	pub used_blocks: i64,
+	pub used_inodes: i64
+}
+

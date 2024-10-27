@@ -192,7 +192,16 @@ impl TranslationLayer {
 	/// fields may be completely made up, as the driver assumes that the SQL backend provides
 	/// unlimited resources.
 	pub fn statfs(&mut self) -> Result<driver_objects::FilesystemStat, Error> {
-		Err(Error::Unimplemented)
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let stat: Vec<database_objects::FilesystemStat> = conn.query(commands::SQL_GET_FS_STAT, None)?;
+		let stat: &database_objects::FilesystemStat = stat.get(0).ok_or(Error::RuntimeError("could not determine fs stat"))?;
+		
+		Ok(driver_objects::FilesystemStat {
+			free_blocks: 420,
+			used_blocks: stat.used_blocks as u64,
+			free_inodes: 69,
+			used_inodes: stat.used_inodes as u64
+		})
 	}
 }
 

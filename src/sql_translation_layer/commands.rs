@@ -27,3 +27,8 @@ pub const SQL_GET_DIRECTORY_PARENT: &'static str = r#"SELECT `parent_inode_id` F
 
 pub const SQL_LOOKUP_INODE_ID: &'static str = r#"SELECT `inode_id` FROM `file` WHERE `name` = ? AND `parent_inode_id` = ?"#;
 
+
+pub const SQL_GET_FS_STAT: &'static str = r#"SELECT
+	(SELECT COUNT(*) FROM `inode`) AS `used_inodes`,
+	(SELECT COUNT(*) FROM `block`) AS `used_blocks`"#;
+
