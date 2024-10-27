@@ -4,7 +4,7 @@ use crate::sql_translation_layer::TranslationLayer;
 use crate::debug;
 
 use fuser;
-use libc::{ENOENT, ENONET, ENOTEMPTY};
+use libc::{EINVAL, ENOENT, ENOTEMPTY};
 
 use std::ffi::OsStr;
 use std::time::Duration;
@@ -379,12 +379,68 @@ impl fuser::Filesystem for DbfsDriver {
 			}
 		};
 
+		debug!(" -> OK");
 		reply.entry(&TTL, &attr.into(), 0);
+	}
+
+	fn symlink(
+		&mut self,
+		req: &fuser::Request<'_>,
+		parent_inode: u64,
+		link_name: &OsStr,
+		target: &std::path::Path,
+		reply: fuser::ReplyEntry,
+	) {
+		debug!("symlink: parent inode {}, name {:?}, target {:?}", parent_inode, link_name, target);
+
+		let target = match target.to_str() {
+			Some(target) => target.as_bytes(),
+			None => {
+				debug!(" -> Err parsing path");
+				reply.error(EINVAL);
+				return
+			}
+		};
+
+		let time = std::time::SystemTime::now();
+		let attr = driver_objects::FileSetAttr {
+			uid: req.uid(),
+			gid: req.gid(),
+			atime: time,
+			ctime: time,
+			mtime: time,
+			perm: driver_objects::Permissions { owner: 7, group: 7, other: 7 }
+		};
+
+		let attr = match self.tl.mknod(parent_inode, link_name, driver_objects::FileType::Symlink, attr) {
+			Ok(attr) => attr,
+			Err(err) => {
+				debug!(" -> Err while creating node: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		if let Err(err) = self.tl.write(attr.ino.into(), 0, target) {
+			debug!(" -> Err while writing symlink data: {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		match self.tl.getattr(attr.ino.into()) {
+			Ok(attr) => {
+				debug!(" -> OK: {:?}", &attr);
+				reply.entry(&TTL, &attr.into(), 0);
+			},
+			Err(err) => {
+				debug!(" -> Err while fetching updated attributes: {:?}", err);
+				reply.error(ENOENT);
+			}
+		}
 	}
 
 	// TODO - setattr
 	// TODO - mknod
-	// TODO - symlink
 	// TODO - rename
 	// TODO - create
 	// TODO - write
