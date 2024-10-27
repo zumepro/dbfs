@@ -122,6 +122,22 @@ impl TranslationLayer {
 	}
 
 
+	/// Determines the corresponding inode ID to a parent inode and file name pair
+	///
+	/// # Inputs
+	/// `name: &OsStr` is the name of the file
+	/// `parent_inode: u64` is the inode ID of the file's parent
+	pub fn lookup_id(&mut self, name: &std::ffi::OsStr, parent_inode: u64) -> Result<u64, Error> {
+		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
+
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let inode: Vec<database_objects::InodeLookup> = conn.query(commands::SQL_LOOKUP_INODE_ID, Some(&vec![path.into(), parent_inode.into()]))?;
+		let inode: &database_objects::InodeLookup = inode.get(0).ok_or(Error::RuntimeError("could not read inode ID"))?;
+
+		Ok(inode.inode_id.into())
+	}
+
+
 	/// Get attributes for file
 	///
 	/// # Inputs
@@ -132,14 +148,8 @@ impl TranslationLayer {
 	/// As this function internally calls getattr, it is also
 	/// a relatively expensive operation, so use as sparingly as possible.
 	pub fn lookup(&mut self, name: &std::ffi::OsStr, parent_inode: u64) -> Result<driver_objects::FileAttr, Error> {
-		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
-
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
-		let inode: Vec<database_objects::InodeLookup> = conn.query(commands::SQL_LOOKUP_INODE_ID, Some(&vec![path.into(), parent_inode.into()]))?;
-		let inode: &database_objects::InodeLookup = inode.get(0).ok_or(Error::RuntimeError("could not read inode ID"))?;
-		drop(conn);
-
-		self.getattr(inode.inode_id.into())
+		let inode = self.lookup_id(name, parent_inode)?;
+		self.getattr(inode)
 	}
 
 
