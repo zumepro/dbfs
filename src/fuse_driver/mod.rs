@@ -260,10 +260,10 @@ impl fuser::Filesystem for DbfsDriver {
 		}
 	}
 
-	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("rmdir: parent inode {}, name {:?}", parent, name);
+	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("rmdir: parent inode {}, name {:?}", parent_inode, name);
 
-		let inode = match self.tl.lookup_id(name, parent) {
+		let inode = match self.tl.lookup_id(name, parent_inode) {
 			Ok(inode) => inode,
 			Err(err) => {
 				debug!(" -> Err while performing lookup: {:?}", err);
@@ -287,13 +287,13 @@ impl fuser::Filesystem for DbfsDriver {
 			return
 		}
 
-		self.unlink(_req, parent, name, reply);
+		self.unlink(_req, parent_inode, name, reply);
 	}
 
-	fn unlink(&mut self, _req: &fuser::Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-	    debug!("unlink: parent inode {}, name {:?}", parent, name);
+	fn unlink(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("unlink: parent inode {}, name {:?}", parent_inode, name);
 
-		if let Err(err) = self.tl.unlink(parent, name) {
+		if let Err(err) = self.tl.unlink(parent_inode, name) {
 			debug!(" -> Err {:?}", err);
 			reply.error(ENOENT);
 			return
@@ -303,12 +303,38 @@ impl fuser::Filesystem for DbfsDriver {
 		reply.ok();
 	}
 
+	fn link(
+		&mut self,
+		_req: &fuser::Request<'_>,
+		inode: u64,
+		new_parent_inode: u64,
+		new_name: &OsStr,
+		reply: fuser::ReplyEntry,
+	) {
+	    debug!("link: inode {}, new parent inode {}, new name {:?}", inode, new_parent_inode, new_name);
+
+		if let Err(err) = self.tl.link(new_parent_inode, new_name, inode) {
+			debug!(" -> Err while creating link: {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		let attr = match self.tl.getattr(inode) {
+			Ok(attr) => attr,
+			Err(err) => {
+				debug!(" -> Err while fetching attributes: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		reply.entry(&TTL, &attr.into(), 0);
+	}
+
 	// TODO - setattr
 	// TODO - mknod
-	// TODO - rmdir
 	// TODO - symlink
 	// TODO - rename
-	// TODO - link
 	// TODO - create
 	// TODO - write
 	// TODO - open (?)
