@@ -178,8 +178,12 @@ impl TranslationLayer {
 
 	/// Read inode contents
 	///
+	/// If the destination buffer is too large, an error will be returned.
+	///
 	/// # Inputs
 	/// `inode: u64` is the id of the inode which will be read
+	/// `offset: u64` is the offset in the inode's data
+	/// `buffer: &mut [u8]` is the destination buffer
 	pub fn read(&mut self, _inode: u64, _offset: u64, _buffer: &mut [u8]) -> Result<(), Error> {
 		Err(Error::Unimplemented)
 	}
@@ -202,6 +206,87 @@ impl TranslationLayer {
 			free_inodes: 69,
 			used_inodes: stat.used_inodes as u64
 		})
+	}
+
+
+	/// Write inode contents
+	///
+	/// If the source buffer is larger than the current inode contents,
+	/// it will be automatically resized.
+	///
+	/// # Inputs
+	/// `inode: u64` is the id of the inode which will be written to
+	/// `offset: u64` is the offset in the inode's data
+	/// `buffer: &[u8]` is the source buffer
+	pub fn write(&mut self, _inode: u64, _offset: u64, _buffer: &[u8]) -> Result<(), Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Create a new inode/file pair with no blocks
+	///
+	/// # Inputs
+	/// `parent_inode: u64` specifies the parent inode where the file should be created
+	/// `name: &OsStr` is the name of the file to be created
+	/// `kind: FileType` sets the inode type
+	/// `attr: FileSetAttr` sets the remaining inode attributes
+	pub fn mknod(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _kind: driver_objects::FileType, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Creates a new file reference to an existing inode
+	///
+	/// # Inputs
+	/// `parent_inode: u64` specifies the parent inode where the file should be created
+	/// `name: &OsStr` is the name of the file to be created
+	/// `dest_inode: u64` sets the inode to which the new file will be poiting to
+	pub fn link(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr, _dest_inode: u64) -> Result<(), Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Truncates or expands an inode by deleting or adding blocks
+	///
+	/// # Inputs
+	/// `inode: u64` specifies the inode
+	/// `new_size: u64` specifies the new size the file should have
+	pub fn resize(&mut self, _inode: u64, _new_size: u64) -> Result<(), Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Sets inode attributes
+	///
+	/// # Inputs
+	/// `inode: u64` specifies the inode
+	/// `attr: FileSetAttr` sets the inode attributes
+	pub fn setattr(&mut self, _inode: u64, _attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Removes a reference to an inode
+	///
+	/// If the inode has zero references, it will be deleted.
+	///
+	/// # Inputs
+	/// `parent_inode: u64` specifies the file's parent inode
+	/// `name: &OsStr` is the name of the file to be deleted
+	pub fn unlink(&mut self, _parent_inode: u64, _name: &std::ffi::OsStr) -> Result<(), Error> {
+		Err(Error::Unimplemented)
+	}
+
+
+	/// Renames/moves a file or directory
+	///
+	/// # Inputs
+	/// `src_parent_inode: u64` specifies the file's former parent inode
+	/// `src_name: &OsStr` is the name of the file to be moved
+	/// `dest_parent_inode: u64` specifies the file's new parent inode
+	/// `dest_name: &OsStr` is the file's new name
+	pub fn rename(&mut self, _src_parent_inode: u64, _src_name: &std::ffi::OsStr, _dest_parent_inode: u64, _dest_name: &std::ffi::OsStr) -> Result<(), Error> {
+		Err(Error::Unimplemented)
 	}
 }
 
