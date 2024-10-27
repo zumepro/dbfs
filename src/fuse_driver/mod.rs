@@ -1,5 +1,6 @@
+use crate::sql_translation_layer::{BLOCK_SIZE, MAX_NAME_LEN};
 use crate::sql_translation_layer::driver_objects;
-use crate::sql_translation_layer::{TranslationLayer, driver_objects::FileAttr};
+use crate::sql_translation_layer::TranslationLayer;
 use crate::debug;
 
 use fuser;
@@ -42,7 +43,7 @@ impl Into<u16> for driver_objects::Permissions {
 	}
 }
 
-impl Into<fuser::FileAttr> for FileAttr {
+impl Into<fuser::FileAttr> for driver_objects::FileAttr {
 	fn into(self) -> fuser::FileAttr {
 		fuser::FileAttr {
 			ino: self.ino.into(),
@@ -189,10 +190,49 @@ impl fuser::Filesystem for DbfsDriver {
 
 		reply.ok();
 	}
+
+	fn statfs(&mut self, _req: &fuser::Request<'_>, inode: u64, reply: fuser::ReplyStatfs) {
+	    debug!("statfs: inode {}", inode);
+
+		let stat = match self.tl.statfs() {
+			Ok(val) => {
+				debug!(" -> OK {:?}", val);
+				val
+			},
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		reply.statfs(
+			stat.free_blocks  + stat.used_blocks,
+			stat.free_blocks,
+			stat.free_blocks,
+			stat.used_inodes,
+			stat.free_blocks,
+			BLOCK_SIZE,
+			MAX_NAME_LEN,
+			BLOCK_SIZE
+		);
+	}
+	
+	// TODO - setattr
+	// TODO - mknod
+	// TODO - mkdir
+	// TODO - unlink
+	// TODO - rmdir
+	// TODO - symlink
+	// TODO - rename
+	// TODO - link
+	// TODO - create
+	// TODO - write
+	// TODO - open (?)
 }
 
 pub fn run_forever(tl: TranslationLayer, mountpoint: &str) -> ! {
-	let options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("hello".to_string())];
+	let options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string())];
 	let driver = DbfsDriver::new(tl);
 	fuser::mount2(driver, mountpoint, &options).unwrap();
 	panic!("FUSE driver crashed");
