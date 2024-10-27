@@ -4,7 +4,7 @@ use crate::sql_translation_layer::TranslationLayer;
 use crate::debug;
 
 use fuser;
-use libc::{ENOENT, ENONET};
+use libc::{ENOENT, ENONET, ENOTEMPTY};
 
 use std::ffi::OsStr;
 use std::time::Duration;
@@ -37,9 +37,18 @@ impl Into<fuser::FileType> for driver_objects::FileType {
 }
 
 impl Into<u16> for driver_objects::Permissions {
-	/// **REVIEW NEEDED**
 	fn into(self) -> u16 {
 		(self.owner as u16) << 6 | (self.group as u16) << 3 | self.other as u16
+	}
+}
+
+impl Into<driver_objects::Permissions> for u16 {
+	fn into(self) -> driver_objects::Permissions {
+	    driver_objects::Permissions {
+			owner: ((self >> 6) & 7) as u8,
+			group: ((self >> 3) & 7) as u8,
+			other: (self & 7) as u8
+		}
 	}
 }
 
@@ -58,9 +67,9 @@ impl Into<fuser::FileAttr> for driver_objects::FileAttr {
 			nlink: self.hardlinks.into(),
 			uid: self.uid,
 			gid: self.gid,
-			rdev: 0, // REVIEW NEEDED
-			blksize: 4096, // REVIEW NEEDED
-			flags: 0, // REVIEW NEEDED
+			rdev: 0,
+			blksize: 4096,
+			flags: 0,
 		}
 	}
 }
@@ -261,15 +270,122 @@ impl fuser::Filesystem for DbfsDriver {
 			BLOCK_SIZE
 		);
 	}
-	
+
+	fn mkdir(
+		&mut self,
+		req: &fuser::Request<'_>,
+		parent_inode: u64,
+		name: &OsStr,
+		mode: u32,
+		_umask: u32,
+		reply: fuser::ReplyEntry,
+	) {
+		#[cfg(feature = "debug")]
+		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", parent_inode, name, mode);
+
+		let time = std::time::SystemTime::now();
+		let attr = driver_objects::FileSetAttr {
+			uid: req.uid(),
+			gid: req.gid(),
+			atime: time,
+			mtime: time,
+			ctime: time,
+			perm: (mode as u16).into()
+		};
+
+		match self.tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr) {
+			Ok(attr) => {
+				#[cfg(feature = "debug")]
+				debug!(" -> OK {:?}", attr);
+				reply.entry(&TTL, &attr.into(), 0);
+			},
+			#[cfg(feature = "debug")]
+			Err(err) => {
+				debug!(" -> Err {:?}", err);
+				reply.error(ENOENT);
+			}
+			#[cfg(not(feature = "debug"))]
+			Err(_) => {
+				reply.error(ENONET);
+			}
+		}
+	}
+
+	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("rmdir: parent inode {}, name {:?}", parent_inode, name);
+
+		let inode = match self.tl.lookup_id(name, parent_inode) {
+			Ok(inode) => inode,
+			Err(err) => {
+				debug!(" -> Err while performing lookup: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		let children = match self.tl.count_children(inode) {
+			Ok(val) => val,
+			Err(err) => {
+				debug!(" -> Err while counting children: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		if children > 2 {
+			debug!(" -> Err, directory not empty");
+			reply.error(ENOTEMPTY);
+			return
+		}
+
+		self.unlink(_req, parent_inode, name, reply);
+	}
+
+	fn unlink(&mut self, _req: &fuser::Request<'_>, parent_inode: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("unlink: parent inode {}, name {:?}", parent_inode, name);
+
+		if let Err(err) = self.tl.unlink(parent_inode, name) {
+			debug!(" -> Err {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		debug!(" -> OK");
+		reply.ok();
+	}
+
+	fn link(
+		&mut self,
+		_req: &fuser::Request<'_>,
+		inode: u64,
+		new_parent_inode: u64,
+		new_name: &OsStr,
+		reply: fuser::ReplyEntry,
+	) {
+	    debug!("link: inode {}, new parent inode {}, new name {:?}", inode, new_parent_inode, new_name);
+
+		if let Err(err) = self.tl.link(new_parent_inode, new_name, inode) {
+			debug!(" -> Err while creating link: {:?}", err);
+			reply.error(ENOENT);
+			return
+		}
+
+		let attr = match self.tl.getattr(inode) {
+			Ok(attr) => attr,
+			Err(err) => {
+				debug!(" -> Err while fetching attributes: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		reply.entry(&TTL, &attr.into(), 0);
+	}
+
 	// TODO - setattr
 	// TODO - mknod
-	// TODO - mkdir
-	// TODO - unlink
-	// TODO - rmdir
 	// TODO - symlink
 	// TODO - rename
-	// TODO - link
 	// TODO - create
 	// TODO - write
 	// TODO - open (?)

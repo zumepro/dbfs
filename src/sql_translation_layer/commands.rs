@@ -12,6 +12,9 @@ FROM `file_tmp`"#;
 pub const SQL_COUNT_HARDLINKS: &'static str = r#"SELECT COUNT(*) AS `hardlinks` FROM `file` WHERE `inode_id` = ?"#;
 
 
+pub const SQL_COUNT_DIRECTORY_CHILDREN: &'static str = r#"SELECT COUNT(*) AS `children` FROM `file` WHERE `parent_inode_id` = ?"#;
+
+
 pub const SQL_GET_INODE: &'static str = r#"SELECT * FROM `inode` WHERE `id` = ?"#;
 
 

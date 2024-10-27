@@ -57,3 +57,9 @@ pub struct FilesystemStat {
 	pub used_inodes: i64
 }
 
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct ChildrenCount {
+	pub count: i64
+}
+
