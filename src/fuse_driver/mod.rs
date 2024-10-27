@@ -4,7 +4,7 @@ use crate::sql_translation_layer::TranslationLayer;
 use crate::debug;
 
 use fuser;
-use libc::ENOENT;
+use libc::{ENOENT, ENOTEMPTY};
 
 use std::ffi::OsStr;
 use std::time::Duration;
@@ -258,6 +258,36 @@ impl fuser::Filesystem for DbfsDriver {
 				reply.error(ENOENT);
 			}
 		}
+	}
+
+	fn rmdir(&mut self, _req: &fuser::Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+	    debug!("rmdir: parent inode {}, name {:?}", parent, name);
+
+		let inode = match self.tl.lookup_id(name, parent) {
+			Ok(inode) => inode,
+			Err(err) => {
+				debug!(" -> Err while performing lookup: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		let children = match self.tl.count_children(inode) {
+			Ok(val) => val,
+			Err(err) => {
+				debug!(" -> Err while counting children: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+		};
+
+		if children > 2 {
+			debug!(" -> Err, directory not empty");
+			reply.error(ENOTEMPTY);
+			return
+		}
+
+		self.unlink(_req, parent, name, reply);
 	}
 
 	fn unlink(&mut self, _req: &fuser::Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
