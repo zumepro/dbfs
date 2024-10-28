@@ -531,7 +531,7 @@ impl fuser::Filesystem for DbfsDriver {
 			perm: (mode as u16).into()
 		};
 
-		match self.tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr) {
+		match self.tl.mknod(parent_inode, name, driver_objects::FileType::File, attr) {
 			Ok(attr) => {
 				debug!(" -> OK {:?}", &attr);
 				reply.entry(&TTL, &attr.into(), 0);
