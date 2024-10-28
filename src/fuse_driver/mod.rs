@@ -577,7 +577,7 @@ impl fuser::Filesystem for DbfsDriver {
 	) {
 		debug!("write: inode {}, offset {}, data len {}", &inode, &offset, &data.len());
 
-		if let Err(err) = self.tl.write(inode, offset as u64, data) {
+		if let Err(err) = self.tl.unsafe_write(inode, offset as u64, data) {
 			debug!(" -> Err {:?}", err);
 			reply.error(ENOENT);
 			return

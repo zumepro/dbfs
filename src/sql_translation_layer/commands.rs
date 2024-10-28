@@ -33,6 +33,18 @@ FROM `file_tmp`"#;
 
 /// # Binds
 /// - `inode_id`
+/// - `start_block_id`
+/// - `end_block_id`
+///
+/// # Columns
+/// - `blocks`
+/// - `start_block_data`
+/// - `end_block_data`
+pub const SQL_GET_SIZE_AND_BLOCK_DATA: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`) SELECT (SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)) AS `blocks`, IFNULL((SELECT `data` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` ASC LIMIT 1 OFFSET ?), '') AS `start_block_data`, IFNULL((SELECT `data` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` ASC LIMIT 1 OFFSET ?), '') AS `end_block_data`"#;
+
+
+/// # Binds
+/// - `inode_id`
 ///
 /// # Columns
 /// - `children_dirs`
@@ -225,10 +237,9 @@ pub const SQL_DROP_BLOCKS: &'static str = r#"DELETE FROM `block` WHERE `inode_id
 pub mod dynamic_queries {
     use crate::sql_translation_layer::database_objects;
 
-
     /// # Binds
     /// - `data` _for every block_
-    pub fn sql_write_start(blocks: &Vec<database_objects::Block>) -> String {
+    pub fn sql_write(blocks: &Vec<database_objects::Block>) -> String {
         let mut query = String::with_capacity(500);
         query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");
         for block in blocks.iter() {
@@ -236,6 +247,24 @@ pub mod dynamic_queries {
             query.push_str(&block.inode_id.to_string());
             query.push_str(",");
             query.push_str(&block.block_id.to_string());
+            query.push_str(",?),");
+        }
+        query.pop();
+        query.push_str(" ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
+        query
+    }
+
+    /// # Binds
+    /// - `data` _for every block_
+    pub fn sql_unsafe_write(inode_id: u64, start_block_id: u64, end_block_id: u64) -> String {
+        let inode_id = inode_id.to_string();
+        let mut query = String::with_capacity(500);
+        query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");
+        for block_id in start_block_id..=end_block_id {
+            query.push_str(" (");
+            query.push_str(&inode_id);
+            query.push_str(",");
+            query.push_str(&block_id.to_string());
             query.push_str(",?),");
         }
         query.pop();
