@@ -82,3 +82,10 @@ pub struct Block {
     pub block_id: u32,
     pub data: Vec<u8>,
 }
+
+
+#[derive(Debug, PartialEq, FromRow, Clone)]
+pub struct FileHead {
+    pub bc: i64,
+    pub last_block_id: u32,
+}

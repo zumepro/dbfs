@@ -9,6 +9,7 @@ use crate::db_connector::chrono;
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
+const DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert driver's u64 to u32 for the database";
 const OOB_WRITE: &'static str = "write is possibly out of bounds";
 
 
@@ -338,6 +339,7 @@ impl TranslationLayer {
 			},
 			Err(_) => FileSize { bytes: 0, blocks: 0 }
 		};
+		println!("{}, {}", size.bytes, size.blocks);
 		let db_filesize = size.bytes.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		if end >= db_filesize { return Err(Error::ClientError(OOB_WRITE)); }
 
@@ -417,8 +419,40 @@ impl TranslationLayer {
 	/// # Inputs
 	/// `inode: u64` specifies the inode
 	/// `new_size: u64` specifies the new size the file should have
-	pub fn resize(&mut self, _inode: u64, _new_size: u64) -> Result<(), Error> {
-		Err(Error::Unimplemented)
+	pub fn resize(&mut self, inode: u64, new_size: u64) -> Result<(), Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		if new_size == 0 {
+			conn.command(commands::SQL_DROP_BLOCKS, Some(&vec![inode.into()]))?;
+			return Ok(());
+		}
+
+		// Get the current file head
+		let file_head: Vec<database_objects::FileHead> = conn.query(commands::SQL_GET_FILE_HEAD, Some(&vec![inode.into()]))?;
+		let file_head = file_head.get(0).ok_or(Error::RuntimeError("could not get filesize"))?;
+
+		// Pad with null blocks if necessary
+		let block_count: u64 = file_head.bc.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
+		let new_block_count = new_size.div_ceil(4096);
+		let strip_blocks_count = if block_count < new_block_count {
+			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
+			conn.command(commands::dynamic_queries::sql_pad_file(
+				inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE))?,
+				file_head.last_block_id,
+				(new_block_count - block_count).try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE))?
+			).as_str(), None)?;
+			0
+		} else {
+			block_count - new_block_count
+		};
+
+		// Trim the file to the desired byte size
+		let new_last_block_size = new_size - (new_block_count - 1) * 4096;
+		if strip_blocks_count != 0 {
+			conn.command(commands::SQL_TRIM_BLOCKS, Some(&vec![inode.into(), strip_blocks_count.into()]))?;
+		}
+		conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![new_last_block_size.into(), new_last_block_size.into(), inode.into()]))?;
+
+		Ok(())
 	}
 
 
@@ -511,10 +545,11 @@ impl TranslationLayer {
 
 
 
-#[cfg(feature = "integration_testing")]
+//#[cfg(feature = "integration_testing")]
 #[cfg(test)]
 mod test {
 	use std::ffi::OsString;
+	use serial_test::serial;
 	use sqlx::types::chrono::{DateTime, Local};
 	use super::*;
 
@@ -630,6 +665,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn lookup_02() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let entry = sql.lookup(&OsString::from("test.bin"), 1).unwrap();
@@ -649,6 +685,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn hardlink_01() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let entry_1 = sql.lookup(&OsString::from("test.bin"), 1).unwrap();
@@ -695,6 +732,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn write_to_file_01() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let original: &[u8] = &"Hello, world!\n".as_bytes();
@@ -708,6 +746,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn write_to_file_02() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let original: &mut[u8] = &mut[0; 4096 * 3 + 4];
@@ -722,10 +761,43 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn write_to_file_03() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let buffer: &[u8] = &"bbbb\n".as_bytes();
 		let write = sql.write(3, 4096 * 3 + 1, buffer);
 		assert!(match write { Ok(()) => { eprintln!("returned ok - should have failed"); false}, Err(Error::ClientError(OOB_WRITE)) => true, Err(_) => false });
+	}
+
+	#[test]
+	#[serial]
+	fn resize_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.resize(3, 4096 * 3 + 3).unwrap();
+		let original: &mut[u8] = &mut[0; 4096 * 3 + 5];
+		let read_bytes = sql.read(3, 0, original).unwrap();
+		println!("{:?}", original);
+		assert_eq!(read_bytes, 4096 * 3 + 3);
+
+		sql.resize(3, 4096 * 3 + 5).unwrap();
+		sql.write(3, 4096 * 3 + 3, &['a' as u8, '\n' as u8]).unwrap();
+		let read_bytes = sql.read(3, 0, original).unwrap();
+		assert_eq!(read_bytes, 4096 * 3 + 5);
+	}
+
+	#[test]
+	#[serial]
+	fn resize_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.resize(3, 4096 + 1028).unwrap();
+		let original: &mut[u8] = &mut[0; 4096 * 3 + 5];
+		let read_bytes = sql.read(3, 0, original).unwrap();
+		println!("{:?}", original);
+		assert_eq!(read_bytes, 4096 + 1028);
+
+		sql.resize(3, 4096 * 3 + 5).unwrap();
+		sql.write(3, 4096 * 3, &['a' as u8, 'a' as u8, 'a' as u8,'a' as u8, '\n' as u8]).unwrap();
+		let read_bytes = sql.read(3, 0, original).unwrap();
+		assert_eq!(read_bytes, 4096 * 3 + 5);
 	}
 }

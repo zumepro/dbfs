@@ -179,6 +179,33 @@ pub const SQL_READ_FILE: &'static str = r#"SELECT `data` FROM `block` WHERE `ino
 pub const SQL_GET_FULL_BLOCKS: &'static str = r#"SELECT * FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` ASC LIMIT ? OFFSET ?"#;
 
 
+/// # Binds
+/// - `inode_id`
+///
+/// # Columns
+/// - `bc` (block count)
+/// - `last_block_id`
+pub const SQL_GET_FILE_HEAD: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`) SELECT COUNT(*) AS `bc`, IFNULL((SELECT `block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1), CAST(0 AS UNSIGNED)) AS `last_block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)"#;
+
+
+/// # Binds
+/// - `inode_id`
+/// - `strip_blocks_count`
+pub const SQL_TRIM_BLOCKS: &'static str = r#"DELETE FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` DESC LIMIT ?"#;
+
+
+/// # Binds
+/// - `last_block_length`
+/// - `last_block_length`
+/// - `inode_id`
+pub const SQL_TRIM_LAST_BLOCK: &'static str = r#"UPDATE `block` SET `data` = RPAD(SUBSTR(`data`, 1, ?), ?, CHAR(0)) WHERE `inode_id` = ? ORDER BY `block_id` DESC LIMIT 1"#;
+
+
+/// # Binds
+/// - `inode_id`
+pub const SQL_DROP_BLOCKS: &'static str = r#"DELETE FROM `block` WHERE `inode_id` = ?"#;
+
+
 pub mod dynamic_queries {
     use crate::sql_translation_layer::database_objects;
 
@@ -197,6 +224,20 @@ pub mod dynamic_queries {
         }
         query.pop();
         query.push_str(" ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
+        query
+    }
+
+    pub fn sql_pad_file(inode_id: u32, last_block_id: u32, count: u32) -> String {
+        let mut query = String::with_capacity(500);
+        query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");
+        for block in 1..=count {
+            query.push_str(" (");
+            query.push_str(&inode_id.to_string());
+            query.push_str(", ");
+            query.push_str(&(last_block_id + block).to_string());
+            query.push_str(", REPEAT(CHAR(0), 4096)),");
+        }
+        query.pop();
         query
     }
 }
