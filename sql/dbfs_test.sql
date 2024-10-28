@@ -42,8 +42,12 @@ CREATE TABLE `file_types` (
 
 INSERT INTO `file_types` (`id`, `description`) VALUES
 ('-', 'Regular file'),
+('b', 'Block device'),
+('c', 'Character device'),
 ('d', 'Directory'),
-('l', 'Symbolic link');
+('l', 'Symbolic link'),
+('p', 'Named pipe'),
+('s', 'Socket');
 
 CREATE TABLE `group` (
   `id` int(10) UNSIGNED NOT NULL,
