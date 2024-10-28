@@ -9,6 +9,15 @@ pub struct FileSize {
 impl Copy for FileSize {}
 
 
+#[derive(Debug, PartialEq, FromRow, Clone)]
+pub struct FileSizeAndHead {
+    pub bytes: i64,
+    pub blocks: i64,
+    pub last_block_id: u32,
+}
+impl Copy for FileSizeAndHead {}
+
+
 #[derive(Debug, PartialEq, FromRow)]
 pub struct FileHardlinks {
     pub hardlinks: i64,

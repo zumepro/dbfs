@@ -9,7 +9,7 @@ use crate::db_connector::chrono;
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
-const DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert driver's u64 to u32 for the database";
+const DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert driver's u64 to u32 for the database";
 const OOB_WRITE: &'static str = "write is possibly out of bounds";
 
 
@@ -20,7 +20,7 @@ pub const BLOCK_SIZE: u32 = 4096;
 pub const MAX_NAME_LEN: u32 = 255;
 
 
-use database_objects::{FileHardlinks, FileSize, Inode, DirectoryChildrenDirectory};
+use database_objects::{DirectoryChildrenDirectory, FileHardlinks, FileSize, FileSizeAndHead, Inode};
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
 
@@ -332,16 +332,20 @@ impl TranslationLayer {
 		let end_block = (end + 1).div_ceil(4096);
 		let block_count = end_block - start_block;
 
-		let size = match conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![inode.into()])) {
+		let size = match conn.query(commands::SQL_GET_SIZE_AND_HEAD, Some(&vec![inode.into()])) {
 			Ok(val) => match val.get(0) {
 				Some(val) => *val,
-				None => FileSize { bytes: 0, blocks: 0 }
+				None => FileSizeAndHead { bytes: 0, blocks: 0, last_block_id: 0 }
 			},
-			Err(_) => FileSize { bytes: 0, blocks: 0 }
+			Err(_) => FileSizeAndHead { bytes: 0, blocks: 0, last_block_id: 0 }
 		};
-		println!("{}, {}", size.bytes, size.blocks);
 		let db_filesize = size.bytes.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
-		if end >= db_filesize { return Err(Error::ClientError(OOB_WRITE)); }
+		let db_bc: u32 = size.blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
+		// If not large enough, make it bigger
+		if end >= db_filesize {
+			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
+			conn.command(commands::dynamic_queries::sql_pad_file(inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?, size.last_block_id.into(), end_block as u32 - db_bc).as_str(), None)?;
+		}
 
 		let mut blocks: Vec<database_objects::Block> = conn.query(commands::SQL_GET_FULL_BLOCKS, Some(&vec![inode.into(), (block_count as u64).into(), (start_block as u64).into()]))?;
 		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
@@ -436,9 +440,9 @@ impl TranslationLayer {
 		let strip_blocks_count = if block_count < new_block_count {
 			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
 			conn.command(commands::dynamic_queries::sql_pad_file(
-				inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE))?,
+				inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?,
 				file_head.last_block_id,
-				(new_block_count - block_count).try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU43_CONVERSION_ERROR_MESSAGE))?
+				(new_block_count - block_count).try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?
 			).as_str(), None)?;
 			0
 		} else {

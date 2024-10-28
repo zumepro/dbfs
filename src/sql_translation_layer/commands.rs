@@ -19,6 +19,22 @@ FROM `file_tmp`"#;
 /// - `inode_id`
 ///
 /// # Columns
+/// - `bytes`
+/// - `blocks`
+/// - `last_block_id`
+pub const SQL_GET_SIZE_AND_HEAD: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`), `file_tmp` (`blocks`) AS (
+    SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)
+) SELECT
+    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
+    `blocks` AS blocks,
+    (SELECT `block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS `last_block_id`,
+FROM `file_tmp`"#;
+
+
+/// # Binds
+/// - `inode_id`
+///
+/// # Columns
 /// - `children_dirs`
 pub const SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`) SELECT COUNT(*) AS `children_dirs` FROM `inode` WHERE `id` IN (SELECT `inode_id` FROM `file` WHERE `parent_inode_id` = (SELECT `ino` FROM `ino`)) AND `id` != (SELECT `ino` FROM `ino`) AND `file_type` = 'd'"#;
 
