@@ -595,8 +595,18 @@ impl fuser::Filesystem for DbfsDriver {
 		self.cache.flush();
 		let mut tl = self.tl.lock().unwrap();
 
+		if let Ok(_) = tl.lookup_id(new_name, new_parent_inode) {
+			debug!(" -> destination exists, deleting the existing file in the destination");
+			if let Err(err) = tl.unlink(new_parent_inode, new_name) {
+				debug!(" -> Err while deleting: {:?}", err);
+				reply.error(ENOENT);
+				return
+			}
+			debug!(" -> OK");
+		}
+
 		if let Err(err) = tl.rename(parent_inode, name, new_parent_inode, new_name) {
-			debug!(" -> Err {:?}", err);
+			debug!(" -> Err while renaming: {:?}", err);
 			reply.error(ENOENT);
 			return
 		}
