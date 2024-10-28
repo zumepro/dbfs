@@ -12,11 +12,15 @@ Absolutely sane project. A working fuse adapter for DB-based filesystem.
 ### Enums
 1. `file_types`
 
-| id | description  |
-|----|--------------|
-| -  | Regular file |
-| d  | Directory    |
-| l  | Symlink      |
+| id | description      |
+|----|------------------|
+| -  | Regular file     |
+| b  | Block device     |
+| c  | Character device |
+| d  | Directory        |
+| l  | Symbolic link    |
+| p  | Named pipe       |
+| s  | Socket           |
 
 2. `special_bits` (_column `description` omitted_)
 
