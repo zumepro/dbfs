@@ -620,6 +620,11 @@ impl fuser::Filesystem for DbfsDriver {
 		debug!("write: inode {}, offset {}, data len {}", &inode, &offset, &data.len());
 
 		self.cache.write(inode, offset as u64, data.to_vec());
+		// if let Err(err) = self.tl.lock().unwrap().unsafe_write(inode, offset as u64, data) {
+		// 	debug!(" -> Err {:?}", err);
+		// 	reply.error(ENOENT);
+		// 	return
+		// }
 
 		debug!(" -> OK");
 		reply.written(data.len() as u32);
