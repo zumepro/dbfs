@@ -1,6 +1,7 @@
 mod cache;
 
-use crate::sql_translation_layer::{BLOCK_SIZE, MAX_NAME_LEN};
+use crate::settings;
+use crate::sql_translation_layer::MAX_NAME_LEN;
 use crate::sql_translation_layer::driver_objects;
 use crate::sql_translation_layer::TranslationLayer;
 use crate::debug;
@@ -267,9 +268,9 @@ impl fuser::Filesystem for DbfsDriver {
 			total_blocks - stat.used_blocks,
 			stat.used_inodes,
 			total_blocks - stat.used_blocks,
-			BLOCK_SIZE,
+			settings::FILE_BLOCK_SIZE_32,
 			MAX_NAME_LEN,
-			BLOCK_SIZE
+			settings::FILE_BLOCK_SIZE_32
 		);
 	}
 
