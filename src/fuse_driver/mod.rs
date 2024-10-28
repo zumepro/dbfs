@@ -255,15 +255,6 @@ impl fuser::Filesystem for DbfsDriver {
 	) {
 		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
 
-		match mode.try_into() {
-			Ok(driver_objects::FileType::Directory) => {},
-			kind @ _ => {
-				debug!(" -> Err - invalid mode, not directory: {:?}", &kind);
-				reply.error(EINVAL);
-				return
-			}
-		};
-
 		let time = std::time::SystemTime::now();
 		let attr = driver_objects::FileSetAttr {
 			uid: req.uid(),
