@@ -131,7 +131,10 @@ impl TranslationLayer {
 		let file_type: database_enums::FileType = (&inode.file_type).into();
 
 		let hardlinks: u32 = match file_type {
-			database_enums::FileType::RegularFile | database_enums::FileType::SymbolicLink => self.count_hardlinks(_inode)?,
+			database_enums::FileType::RegularFile
+				| database_enums::FileType::SymbolicLink
+				| database_enums::FileType::Socket
+				| database_enums::FileType::NamedPipe => self.count_hardlinks(_inode)?,
 			database_enums::FileType::Directory => self.count_subdirs(_inode)?,
 			database_enums::FileType::Unknown => 0,
 		};
@@ -142,7 +145,9 @@ impl TranslationLayer {
 			driver_objects::FileType::File | driver_objects::FileType::Symlink => {
 				self.filesize(_inode)?
 			},
-			driver_objects::FileType::Directory => driver_objects::FileSize { bytes: 0, blocks: 0 },
+			driver_objects::FileType::Socket
+				| driver_objects::FileType::NamedPipe
+				| driver_objects::FileType::Directory => driver_objects::FileSize { bytes: 0, blocks: 0 },
 		};
 
 		Ok(driver_objects::FileAttr {

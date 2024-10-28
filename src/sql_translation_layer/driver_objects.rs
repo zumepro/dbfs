@@ -15,6 +15,8 @@ pub enum FileType {
 	File,
 	Directory,
 	Symlink,
+	NamedPipe,
+	Socket
 }
 impl TryFrom<database_enums::FileType> for FileType {
 	type Error = super::Error;
@@ -24,6 +26,8 @@ impl TryFrom<database_enums::FileType> for FileType {
 			database_enums::FileType::RegularFile => Self::File,
 			database_enums::FileType::SymbolicLink => Self::Symlink,
 			database_enums::FileType::Directory => Self::Directory,
+			database_enums::FileType::NamedPipe => Self::NamedPipe,
+			database_enums::FileType::Socket => Self::Socket,
 			database_enums::FileType::Unknown => Err(super::Error::RuntimeError("unknown filetype"))?,
 		})
 	}
@@ -33,7 +37,9 @@ impl Into<String> for FileType {
 	    match self {
 			FileType::File => "-".to_string(),
 			FileType::Directory => "d".to_string(),
-			FileType::Symlink => "l".to_string()
+			FileType::Symlink => "l".to_string(),
+			FileType::NamedPipe => "p".to_string(),
+			FileType::Socket => "s".to_string()
 		}
 	}
 }

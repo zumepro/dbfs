@@ -31,9 +31,11 @@ impl TryInto<driver_objects::FileType> for u32 {
 
 	fn try_into(self) -> Result<driver_objects::FileType, Self::Error> {
 	    match (self >> 12) & 0xF {
+			0x1 => Ok(driver_objects::FileType::NamedPipe),
 			0x4 => Ok(driver_objects::FileType::Directory),
 			0x8 => Ok(driver_objects::FileType::File),
 			0xA => Ok(driver_objects::FileType::Symlink),
+			0xC => Ok(driver_objects::FileType::Socket),
 			_ => Err(())
 		}
 	}
@@ -45,6 +47,8 @@ impl Into<fuser::FileType> for driver_objects::FileType {
 			Self::File => fuser::FileType::RegularFile,
 			Self::Directory => fuser::FileType::Directory,
 			Self::Symlink => fuser::FileType::Symlink,
+			Self::NamedPipe => fuser::FileType::NamedPipe,
+			Self::Socket => fuser::FileType::Socket,
 		}
 	}
 }
@@ -504,10 +508,12 @@ impl fuser::Filesystem for DbfsDriver {
 	) {
 		debug!("mknod: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
 
-		match mode.try_into() {
-			Ok(driver_objects::FileType::File) => {},
+		let kind = match mode.try_into() {
+			Ok(kind @ driver_objects::FileType::File) => kind,
+			Ok(kind @ driver_objects::FileType::Socket) => kind,
+			Ok(kind @ driver_objects::FileType::NamedPipe) => kind,
 			kind @ _ => {
-				debug!(" -> Err - invalid mode, not regular file: {:?}", &kind);
+				debug!(" -> Err - invalid mode, not regular file, socket or pipe: {:?}", &kind);
 				reply.error(EINVAL);
 				return
 			}
@@ -523,7 +529,7 @@ impl fuser::Filesystem for DbfsDriver {
 			perm: (mode as u16).into()
 		};
 
-		match self.tl.mknod(parent_inode, name, driver_objects::FileType::File, attr) {
+		match self.tl.mknod(parent_inode, name, kind, attr) {
 			Ok(attr) => {
 				debug!(" -> OK {:?}", &attr);
 				reply.entry(&TTL, &attr.into(), 0);

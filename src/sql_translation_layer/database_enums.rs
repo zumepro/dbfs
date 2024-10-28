@@ -2,6 +2,8 @@ pub enum FileType {
 	RegularFile,
 	Directory,
 	SymbolicLink,
+	NamedPipe,
+	Socket,
 	Unknown,
 }
 impl From<&String> for FileType {
@@ -10,7 +12,9 @@ impl From<&String> for FileType {
 			"-" => Self::RegularFile,
 			"d" => Self::Directory,
 			"l" => Self::SymbolicLink,
-			_ => Self::Unknown,
+			"p" => Self::NamedPipe,
+			"s" => Self::Socket,
+ 			_ => Self::Unknown,
 		}
 	}
 }
