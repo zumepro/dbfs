@@ -236,12 +236,14 @@ impl fuser::Filesystem for DbfsDriver {
 			}
 		};
 
+		let total_blocks = 1 << 48;
+
 		reply.statfs(
-			stat.free_blocks  + stat.used_blocks,
-			stat.free_blocks,
-			stat.free_blocks,
+			total_blocks,
+			total_blocks - stat.used_blocks,
+			total_blocks - stat.used_blocks,
 			stat.used_inodes,
-			stat.free_blocks,
+			total_blocks - stat.used_blocks,
 			BLOCK_SIZE,
 			MAX_NAME_LEN,
 			BLOCK_SIZE
@@ -257,7 +259,7 @@ impl fuser::Filesystem for DbfsDriver {
 		_umask: u32,
 		reply: fuser::ReplyEntry,
 	) {
-		debug!("mkdir: parent inode {}, name {:?}, mode {:o}", &parent_inode, &name, &mode);
+		debug!("mkdir: parent inode {}, name {:?}, mode {:o}, user {}, group {}", &parent_inode, &name, &mode, req.uid(), req.gid());
 
 		let time = std::time::SystemTime::now();
 		let attr = driver_objects::FileSetAttr {
@@ -591,8 +593,9 @@ impl fuser::Filesystem for DbfsDriver {
 	// TODO - open (?)
 }
 
-pub fn run_forever(tl: TranslationLayer, mountpoint: &str) -> ! {
-	let options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string()), fuser::MountOption::DefaultPermissions];
+pub fn run_forever(tl: TranslationLayer, mountpoint: &str, root: bool) -> ! {
+	let mut options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string()), fuser::MountOption::DefaultPermissions];
+	if root { options.push(fuser::MountOption::AllowRoot); }
 	let driver = DbfsDriver::new(tl);
 	fuser::mount2(driver, mountpoint, &options).unwrap();
 	panic!("FUSE driver crashed");
