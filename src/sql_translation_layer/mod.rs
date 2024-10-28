@@ -230,7 +230,7 @@ impl TranslationLayer {
 	}
 
 
-	/// Count the children of a directory
+	/// Count the children of a directory (+2 for "." and "..")
 	///
 	/// # Inputs
 	/// `inode: u64` is the id of the inode of the desired directory
@@ -245,7 +245,7 @@ impl TranslationLayer {
 		let count: Vec<database_objects::ChildrenCount> = conn.query(commands::SQL_COUNT_DIRECTORY_CHILDREN, Some(&vec![inode.into()]))?;
 		let count: &database_objects::ChildrenCount = count.get(0).ok_or(Error::RuntimeError("could not determine children count"))?;
 
-		Ok(count.children as u64)
+		Ok((count.children + 2) as u64)
 	}
 
 

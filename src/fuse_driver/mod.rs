@@ -304,6 +304,7 @@ impl fuser::Filesystem for DbfsDriver {
 			return
 		}
 
+		debug!(" -> OK, safe number of children to delete {}, passing request to unlink", children);
 		self.unlink(_req, parent_inode, name, reply);
 	}
 
