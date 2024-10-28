@@ -61,7 +61,7 @@ impl CacheThread {
 
 		debug!("CACHE: flushing inode {}, offset {}, {} bytes", self.last_inode, self.cache_inode_offset, self.cache_ptr);
 
-		let _ = self.tl.lock().unwrap().write(self.last_inode, self.cache_inode_offset, &self.cache[..self.cache_ptr]); // TODO - error handling
+		let _ = self.tl.lock().unwrap().unsafe_write(self.last_inode, self.cache_inode_offset, &self.cache[..self.cache_ptr]); // TODO - error handling
 
 		self.cache_inode_offset += self.cache_ptr as u64;
 		self.cache_ptr = 0;

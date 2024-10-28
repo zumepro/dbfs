@@ -98,3 +98,11 @@ pub struct FileHead {
     pub bc: i64,
     pub last_block_id: u32,
 }
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct FileWriteInfo {
+    pub blocks: i64,
+    pub start_block_data: Vec<u8>,
+    pub end_block_data: Vec<u8>,
+}
