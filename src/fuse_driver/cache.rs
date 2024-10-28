@@ -31,10 +31,7 @@ struct CacheThread {
 
 impl CacheThread {
 	fn write(&mut self, write: WriteCommand) {
-		if write.inode != self.last_inode
-			|| write.offset < self.cache_inode_offset
-			|| write.offset >= self.cache_inode_offset + self.cache.len() as u64 {
-
+		if write.inode != self.last_inode || write.offset != self.cache_inode_offset + self.cache_ptr as u64 {
 			self.flush();
 			self.last_inode = write.inode;
 			self.cache_inode_offset = write.offset;
