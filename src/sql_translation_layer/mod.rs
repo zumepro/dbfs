@@ -342,8 +342,10 @@ impl TranslationLayer {
 		let db_filesize = size.bytes.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		let db_bc: u32 = size.blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		// If not large enough, make it bigger
-		if end >= db_filesize {
+		if end > db_filesize {
 			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
+		}
+		if end_block as u32 > db_bc {
 			conn.command(commands::dynamic_queries::sql_pad_file(inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?, size.last_block_id.into(), end_block as u32 - db_bc).as_str(), None)?;
 		}
 

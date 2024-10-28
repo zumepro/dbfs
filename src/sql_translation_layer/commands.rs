@@ -27,7 +27,7 @@ pub const SQL_GET_SIZE_AND_HEAD: &'static str = r#"WITH `ino` AS (SELECT ? AS `i
 ) SELECT
     `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
     `blocks` AS blocks,
-    (SELECT `block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS `last_block_id`,
+    (IFNULL((SELECT `block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1), CAST(0 AS UNSIGNED))) AS `last_block_id`
 FROM `file_tmp`"#;
 
 
