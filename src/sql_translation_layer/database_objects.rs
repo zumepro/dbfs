@@ -66,7 +66,7 @@ pub struct FilesystemStat {
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct ChildrenCount {
-    pub count: i64
+    pub children: i64
 }
 
 
