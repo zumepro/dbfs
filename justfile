@@ -22,6 +22,16 @@ test_int: _test_db
     cargo test --features integration_testing
 
 
+_prepare_prod_cont:
+    podman run --detach --name dbfs --rm --env MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 -p "127.0.0.1:3306:3306" docker.io/mariadb:latest
+
+_prepare_setup_prod_db:
+    #!/bin/bash
+    user_creation="CREATE DATABASE \`dbfs\`; GRANT ALL PRIVILEGES ON \`dbfs\`.* TO 'dbfs'@'%' IDENTIFIED BY 'dbfs'; USE \`dbfs\`;"
+    data_file=$(cat "./sql/dbfs.sql")
+    quit=$(echo -e "\nEXIT;")
+    echo "$user_creation$data_file$quit" | podman exec -it dbfs mariadb
+
 
 _prepare_run_cont:
     podman run --detach --name dbfs_intest_db --rm --env MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 -p "127.0.0.1:3306:3306" docker.io/mariadb:latest
@@ -42,13 +52,19 @@ _prepare_setup_db:
 
 [group("testing")]
 [doc("Prepare integration testing environment")]
-prepare: (_prepare_run_cont) _wait_for_container_start _prepare_setup_db
+prepare_int: (_prepare_run_cont) _wait_for_container_start _prepare_setup_db
+
+
+[group("production env")]
+[doc("Prepare for production run")]
+prepare: _prepare_prod_cont _wait_for_container_start _prepare_setup_prod_db
 
 
 [group("testing")]
 [doc("Stop and clean integration testing environment")]
 stop:
-    podman stop dbfs_intest_db
+    -podman stop dbfs_intest_db
+    -podman stop dbfs
 
 
 clean:

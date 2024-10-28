@@ -4,7 +4,7 @@ pub mod driver_objects;
 mod commands;
 
 
-use crate::db_connector::{self, chrono};
+use crate::{db_connector::chrono, settings};
 
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
@@ -12,9 +12,6 @@ const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert
 const DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert driver's u64 to u32 for the database";
 const OOB_WRITE: &'static str = "write is possibly out of bounds";
 
-
-/// Filesystem block size.
-pub const BLOCK_SIZE: u32 = 4096;
 
 /// Maximum allowed file name length. Taken from the `dbfs.sql` init script.
 pub const MAX_NAME_LEN: u32 = 255;
@@ -273,8 +270,8 @@ impl TranslationLayer {
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 
 		let max_bytes = buffer.len();
-		let max_blocks = (max_bytes.div_ceil(4096) + 1_usize) as u64;
-		let offset_blocks = offset / 4096;
+		let max_blocks = (max_bytes.div_ceil(settings::FILE_BLOCK_SIZE_USIZE) + 1_usize) as u64;
+		let offset_blocks = offset / settings::FILE_BLOCK_SIZE;
 		let offset = offset as usize;
 
 		let blocks: Vec<database_objects::BlockData> = conn.query(commands::SQL_READ_FILE, Some(&vec![inode.into(), max_blocks.into(), offset_blocks.into()]))?;
@@ -284,7 +281,7 @@ impl TranslationLayer {
 				_ => { return Err(Error::ClientError("read failed (pointer or size invalid)")); },
 			}
 		}
-		let bytes: Vec<u8> = blocks.iter().flat_map(|inner| inner.data.iter()).skip(offset - (offset_blocks * 4096) as usize).take(max_bytes).map(|val| val.clone()).collect();
+		let bytes: Vec<u8> = blocks.iter().flat_map(|inner| inner.data.iter()).skip(offset - (offset_blocks * settings::FILE_BLOCK_SIZE) as usize).take(max_bytes).map(|val| val.clone()).collect();
 		let read = bytes.len();
 		buffer[..bytes.len()].copy_from_slice(&bytes);
 
@@ -324,10 +321,10 @@ impl TranslationLayer {
 
 		let length = buffer.len();
 		if length == 0 { return Ok(()); }
-		let start_block = (offset / 4096) as usize;
-		let start = offset as usize - start_block * 4096;
+		let start_block = (offset / settings::FILE_BLOCK_SIZE) as usize;
+		let start = offset as usize - start_block * settings::FILE_BLOCK_SIZE_USIZE;
 		let end = offset as usize + length - 1;
-		let end_block = (end + 1).div_ceil(4096);
+		let end_block = (end + 1).div_ceil(settings::FILE_BLOCK_SIZE_USIZE);
 		let block_count = end_block - start_block;
 
 		let size = match conn.query(commands::SQL_GET_SIZE_AND_HEAD, Some(&vec![inode.into()])) {
@@ -341,7 +338,7 @@ impl TranslationLayer {
 		let db_bc: u32 = size.blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		// If not large enough, make it bigger
 		if end > db_filesize {
-			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
+			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
 		}
 		if end_block as u32 > db_bc {
 			conn.command(commands::dynamic_queries::sql_pad_file(inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?, size.last_block_id.into(), end_block as u32 - db_bc).as_str(), None)?;
@@ -353,8 +350,8 @@ impl TranslationLayer {
 		let query = commands::dynamic_queries::sql_write(&blocks);
 
 		for (current_block, current_inblock_pos, byte) in buffer.iter().enumerate().map(|(idx, val)| {
-			let current_block = (idx + start) / 4096;
-			let current_inblock_pos = idx + start - current_block * 4096;
+			let current_block = (idx + start) / settings::FILE_BLOCK_SIZE_USIZE;
+			let current_inblock_pos = idx + start - current_block * settings::FILE_BLOCK_SIZE_USIZE;
 			(current_block, current_inblock_pos, val)
 		}) {
 			blocks[current_block].data[current_inblock_pos] = *byte;
@@ -381,7 +378,7 @@ impl TranslationLayer {
 	/// # Warning
 	/// This function makes multiple presumptions about the file contents:
 	/// - The `block_id`s are consistent (from 1 to n incrementally)
-	/// - Each block (except the last one) has size of exactly 4096 octets
+	/// - Each block (except the last one) has size of exactly [`settings::FILE_BLOCK_SIZE`] octets
 	/// - The write is well-aligned (such that there are no spaces)
 	///
 	/// # Inputs
@@ -394,10 +391,10 @@ impl TranslationLayer {
 		let buffer_len = buffer.len() as u64;
 		if buffer.len() == 0 { return Ok(()); }
 
-		let start_block = offset / 4096;
-		let end_block = (offset + buffer_len - 1) / 4096;
-		let start_idx = offset - start_block * 4096;
-		let end_idx = offset + buffer_len - end_block * 4096 - 1;
+		let start_block = offset / settings::FILE_BLOCK_SIZE;
+		let end_block = (offset + buffer_len - 1) / settings::FILE_BLOCK_SIZE;
+		let start_idx = offset - start_block * settings::FILE_BLOCK_SIZE;
+		let end_idx = offset + buffer_len - end_block * settings::FILE_BLOCK_SIZE - 1;
 
 		let db_block_data: Vec<database_objects::FileWriteInfo> = conn.query(commands::SQL_GET_SIZE_AND_BLOCK_DATA, Some(&vec![inode.into(), start_block.into(), end_block.into()]))?;
 		let db_block_data: &database_objects::FileWriteInfo = db_block_data.get(0).ok_or(Error::RuntimeError("could not get file content info"))?;
@@ -406,17 +403,17 @@ impl TranslationLayer {
 		let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
 
 		let mut to_write = vec![0; (start_idx + buffer_len + padding_end).try_into().unwrap()];
-		to_write[0..start_idx.try_into().unwrap()].copy_from_slice(&db_block_data.start_block_data);
-		to_write[start_idx.try_into().unwrap()..=(usize::try_from(end_block - start_block).unwrap() * 4096 + usize::try_from(end_idx).unwrap())].copy_from_slice(buffer);
-		if end_idx != 4096 && end_idx < db_block_data.end_block_data.len() as u64 {
+		to_write[0..start_idx.try_into().unwrap()].copy_from_slice(&db_block_data.start_block_data[0..std::cmp::min(db_block_data.start_block_data.len(), usize::try_from(start_idx).unwrap())]);
+		to_write[start_idx.try_into().unwrap()..=(usize::try_from(end_block - start_block).unwrap() * settings::FILE_BLOCK_SIZE_USIZE + usize::try_from(end_idx).unwrap())].copy_from_slice(buffer);
+		if end_idx != settings::FILE_BLOCK_SIZE && end_idx < db_block_data.end_block_data.len() as u64 {
 			to_write[usize::try_from(end_idx).unwrap()+1..db_block_data.end_block_data.len()].copy_from_slice(&db_block_data.end_block_data[usize::try_from(end_idx).unwrap()+1..]);
 		}
 
 		let mut data: Vec<_> = Vec::new();
 		let mut ptr = 0;
 		while ptr < to_write.len() {
-			data.push(Vec::from(&to_write[ptr..std::cmp::min(ptr + 4096, to_write.len())]).into());
-			ptr += 4096;
+			data.push(Vec::from(&to_write[ptr..std::cmp::min(ptr + settings::FILE_BLOCK_SIZE_USIZE, to_write.len())]).into());
+			ptr += settings::FILE_BLOCK_SIZE_USIZE;
 		}
 
 		let command = commands::dynamic_queries::sql_unsafe_write(inode, start_block, end_block);
@@ -492,9 +489,9 @@ impl TranslationLayer {
 
 		// Pad with null blocks if necessary
 		let block_count: u64 = file_head.bc.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
-		let new_block_count = new_size.div_ceil(4096);
+		let new_block_count = new_size.div_ceil(settings::FILE_BLOCK_SIZE);
 		let strip_blocks_count = if block_count < new_block_count {
-			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![4096.into(), 4096.into(), inode.into()]))?;
+			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
 			conn.command(commands::dynamic_queries::sql_pad_file(
 				inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?,
 				file_head.last_block_id,
@@ -506,7 +503,7 @@ impl TranslationLayer {
 		};
 
 		// Trim the file to the desired byte size
-		let new_last_block_size = new_size - (new_block_count - 1) * 4096;
+		let new_last_block_size = new_size - (new_block_count - 1) * settings::FILE_BLOCK_SIZE;
 		if strip_blocks_count != 0 {
 			conn.command(commands::SQL_TRIM_BLOCKS, Some(&vec![inode.into(), strip_blocks_count.into()]))?;
 		}
@@ -605,7 +602,7 @@ impl TranslationLayer {
 
 
 
-//#[cfg(feature = "integration_testing")]
+#[cfg(feature = "integration_testing")]
 #[cfg(test)]
 mod test {
 	use std::ffi::OsString;

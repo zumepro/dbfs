@@ -18,11 +18,22 @@ CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` varchar(50) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+INSERT INTO `file_types` (`id`, `description`) VALUES
+('-', 'Regular file'),
+('b', 'Block device'),
+('c', 'Character device'),
+('d', 'Directory'),
+('l', 'Symbolic link'),
+('p', 'Named pipe'),
+('s', 'Socket');
 
 CREATE TABLE `group` (
   `id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO `group` (`id`, `name`) VALUES
+(0, 'root'),
+(1, 'user');
 
 CREATE TABLE `inode` (
   `id` int(10) UNSIGNED NOT NULL,
@@ -44,6 +55,15 @@ CREATE TABLE `permissions` (
   `can_write` tinyint(1) UNSIGNED NOT NULL,
   `can_execute` tinyint(1) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+INSERT INTO `permissions` (`id`, `can_read`, `can_write`, `can_execute`) VALUES
+(0, 0, 0, 0),
+(1, 0, 0, 1),
+(2, 0, 1, 0),
+(3, 0, 1, 1),
+(4, 1, 0, 0),
+(5, 1, 0, 1),
+(6, 1, 1, 0),
+(7, 1, 1, 1);
 
 CREATE TABLE `special_bits` (
   `id` tinyint(4) UNSIGNED NOT NULL,
@@ -52,11 +72,23 @@ CREATE TABLE `special_bits` (
   `sticky` tinyint(1) UNSIGNED NOT NULL,
   `description` varchar(100) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+INSERT INTO `special_bits` (`id`, `setuid`, `setgid`, `sticky`, `description`) VALUES
+(0, 0, 0, 0, 'No special bits'),
+(1, 0, 0, 1, 'Sticky bit'),
+(2, 0, 1, 0, 'Set group ID'),
+(3, 0, 1, 1, 'Set group ID and Sticky bit'),
+(4, 1, 0, 0, 'Set user ID'),
+(5, 1, 0, 1, 'Set user ID and Sticky bit'),
+(6, 1, 1, 0, 'Set user ID and Set group ID'),
+(7, 1, 1, 1, 'Set user ID, Set group ID, and Sticky bit');
 
 CREATE TABLE `user` (
   `id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO `user` (`id`, `name`) VALUES
+(0, 'root'),
+(1, 'user');
 
 
 ALTER TABLE `block`
@@ -65,6 +97,8 @@ ALTER TABLE `block`
 ALTER TABLE `file`
   ADD PRIMARY KEY (`parent_inode_id`,`name`),
   ADD KEY `inode_id` (`inode_id`);
+INSERT INTO `file` (`parent_inode_id`, `name`, `inode_id`) VALUES
+(1, '/', 1);
 
 ALTER TABLE `file_types`
   ADD PRIMARY KEY (`id`);
@@ -81,6 +115,8 @@ ALTER TABLE `inode`
   ADD KEY `inode_owner` (`owner`),
   ADD KEY `inode_special_bits` (`special_bits`),
   ADD KEY `inode_user_perm` (`user_perm`);
+INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
+(1, 1, 1, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52');
 
 ALTER TABLE `permissions`
   ADD PRIMARY KEY (`id`);
