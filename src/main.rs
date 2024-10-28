@@ -33,7 +33,7 @@ fn main() {
 	};
 
 	debug!("starting FUSE driver");
-	fuse_driver::run_forever(tl, &args.mountpoint);
+	fuse_driver::run_forever(tl, &args.mountpoint, args.allow_root);
 }
 
 

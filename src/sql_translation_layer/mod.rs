@@ -304,9 +304,7 @@ impl TranslationLayer {
 		let stat: &database_objects::FilesystemStat = stat.get(0).ok_or(Error::RuntimeError("could not determine fs stat"))?;
 		
 		Ok(driver_objects::FilesystemStat {
-			free_blocks: 420,
 			used_blocks: stat.used_blocks as u64,
-			free_inodes: 69,
 			used_inodes: stat.used_inodes as u64
 		})
 	}

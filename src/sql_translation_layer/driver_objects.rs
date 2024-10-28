@@ -156,9 +156,7 @@ impl Into<FileSize> for database_objects::FileSize {
 /// Filesystem statistics structure
 #[derive(Debug, PartialEq)]
 pub struct FilesystemStat {
-	pub free_blocks: u64,
 	pub used_blocks: u64,
-	pub free_inodes: u64,
 	pub used_inodes: u64
 }
 
