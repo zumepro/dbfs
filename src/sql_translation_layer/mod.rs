@@ -406,7 +406,7 @@ impl TranslationLayer {
 		let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
 
 		let mut to_write = vec![0; (start_idx + buffer_len + padding_end).try_into().unwrap()];
-		to_write[0..start_idx.try_into().unwrap()].copy_from_slice(&db_block_data.start_block_data);
+		to_write[0..start_idx.try_into().unwrap()].copy_from_slice(&db_block_data.start_block_data[0..std::cmp::min(db_block_data.start_block_data.len(), usize::try_from(start_idx).unwrap())]);
 		to_write[start_idx.try_into().unwrap()..=(usize::try_from(end_block - start_block).unwrap() * 4096 + usize::try_from(end_idx).unwrap())].copy_from_slice(buffer);
 		if end_idx != 4096 && end_idx < db_block_data.end_block_data.len() as u64 {
 			to_write[usize::try_from(end_idx).unwrap()+1..db_block_data.end_block_data.len()].copy_from_slice(&db_block_data.end_block_data[usize::try_from(end_idx).unwrap()+1..]);
