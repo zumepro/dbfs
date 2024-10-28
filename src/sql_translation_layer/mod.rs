@@ -389,7 +389,6 @@ impl TranslationLayer {
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &[u8]` is the source buffer
 	pub fn unsafe_write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
-		println!("unsafe write: inode {}, offset {}, buffer len {}", inode, offset, buffer.len());
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 
 		let buffer_len = buffer.len() as u64;
