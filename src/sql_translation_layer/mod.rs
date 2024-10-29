@@ -463,11 +463,12 @@ impl TranslationLayer {
 			path.into(),
 			dest_inode.into()
 		]))?;
-		drop(conn);
-		match status.rows_affected {
-			1 => Ok(()),
-			_ => Err(Error::RuntimeError("no changes made"))
+		if status.rows_affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![parent_inode.into()]))?;
+		Ok(())
 	}
 
 
@@ -554,10 +555,12 @@ impl TranslationLayer {
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 		let status = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
-		drop(conn);
 		if status.rows_affected != 1 {
 			return Err(Error::RuntimeError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![parent_inode.into()]))?;
+		drop(conn);
 
 		let attr = self.getattr(inode)?;
 		let delete_inode = match (attr.hardlinks, attr.kind) {
@@ -591,11 +594,16 @@ impl TranslationLayer {
 
 		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
 		let status = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
-
-		match status.rows_affected {
-			1 => Ok(()),
-			_ => Err(Error::RuntimeError("no changes made"))
+		if status.rows_affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![src_parent_inode.into()]))?;
+		if dest_parent_inode != src_parent_inode {
+			let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![dest_parent_inode.into()]))?;
+		}
+
+		Ok(())
 	}
 }
 
