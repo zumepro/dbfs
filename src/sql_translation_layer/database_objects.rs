@@ -106,3 +106,16 @@ pub struct FileWriteInfo {
     pub start_block_data: Vec<u8>,
     pub end_block_data: Vec<u8>,
 }
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct FileWriteInfoSingleBlock {
+    pub blocks: i64,
+    pub block_data: Vec<u8>,
+}
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct FileWriteInfoSizeOnly {
+	pub blocks: i64,
+}

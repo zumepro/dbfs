@@ -49,6 +49,16 @@ fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 }
 
 
+/// Will try to clone a part of one slice into a part of other slice
+/// If anything is outside of range - it will cancel the operation
+/// If the two slices have different sizes - it will panic.
+macro_rules! try_slice_from_slice {
+	($source:expr, $source_range:expr, $target:expr, $target_range:expr) => {
+		$target.get_mut($target_range).map(|left| -> Option<_> { Some(left.copy_from_slice(&$source.get($source_range)?)) });
+	}
+}
+
+
 impl TranslationLayer {
 	/// Create a [`TranslationLayer`] object and use the defaults from [`crate::settings`] to
 	/// login to the database
@@ -338,7 +348,7 @@ impl TranslationLayer {
 		let db_bc: u32 = size.blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		// If not large enough, make it bigger
 		if end > db_filesize {
-			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
+			conn.command(commands::SQL_RESIZE_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
 		}
 		if end_block as u32 > db_bc {
 			conn.command(commands::dynamic_queries::sql_pad_file(inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?, size.last_block_id.into(), end_block as u32 - db_bc).as_str(), None)?;
@@ -365,7 +375,7 @@ impl TranslationLayer {
 
 		Ok(())
 	}
-	
+
 
 	/// Write inode contents
 	///
@@ -379,7 +389,6 @@ impl TranslationLayer {
 	/// This function makes multiple presumptions about the file contents:
 	/// - The `block_id`s are consistent (from 1 to n incrementally)
 	/// - Each block (except the last one) has size of exactly [`settings::FILE_BLOCK_SIZE`] octets
-	/// - The write is well-aligned (such that there are no spaces)
 	///
 	/// # Inputs
 	/// `inode: u64` is the id of the inode which will be written to
@@ -391,24 +400,77 @@ impl TranslationLayer {
 		let buffer_len = buffer.len() as u64;
 		if buffer.len() == 0 { return Ok(()); }
 
+		// Some pointer calculations
 		let start_block = offset / settings::FILE_BLOCK_SIZE;
 		let end_block = (offset + buffer_len - 1) / settings::FILE_BLOCK_SIZE;
 		let start_idx = offset - start_block * settings::FILE_BLOCK_SIZE;
 		let end_idx = offset + buffer_len - end_block * settings::FILE_BLOCK_SIZE - 1;
 
-		let db_block_data: Vec<database_objects::FileWriteInfo> = conn.query(commands::SQL_GET_SIZE_AND_BLOCK_DATA, Some(&vec![inode.into(), start_block.into(), end_block.into()]))?;
-		let db_block_data: &database_objects::FileWriteInfo = db_block_data.get(0).ok_or(Error::RuntimeError("could not get file content info"))?;
 
-		let padding_end = db_block_data.end_block_data.len() as u64;
-		let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
+		// Fetch stuff from the DB (like the current block count)
+		// and init the buffer with paddings
+		let mut to_write: Vec<u8>;
+		let blocks = if start_idx == 0 && end_idx == settings::FILE_BLOCK_SIZE - 1 {
+			let result = conn.query(commands::SQL_GET_SIZE_ONLY, Some(&vec![inode.into()]))?;
+			let result_item: &database_objects::FileWriteInfoSizeOnly = result.get(0).ok_or(Error::RuntimeError("could not get filesize"))?;
 
-		let mut to_write = vec![0; (start_idx + buffer_len + padding_end).try_into().unwrap()];
-		to_write[0..start_idx.try_into().unwrap()].copy_from_slice(&db_block_data.start_block_data[0..std::cmp::min(db_block_data.start_block_data.len(), usize::try_from(start_idx).unwrap())]);
-		to_write[start_idx.try_into().unwrap()..=(usize::try_from(end_block - start_block).unwrap() * settings::FILE_BLOCK_SIZE_USIZE + usize::try_from(end_idx).unwrap())].copy_from_slice(buffer);
-		if end_idx != settings::FILE_BLOCK_SIZE && end_idx < db_block_data.end_block_data.len() as u64 {
-			to_write[usize::try_from(end_idx).unwrap()+1..db_block_data.end_block_data.len()].copy_from_slice(&db_block_data.end_block_data[usize::try_from(end_idx).unwrap()+1..]);
+			to_write = vec![0; buffer_len as usize];
+			result_item.blocks
+		} else if start_idx == 0 {
+			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), end_block.into()]))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+
+			let padding_end = result_item.block_data.len() as u64;
+			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
+			to_write = vec![0; (buffer_len + padding_end) as usize];
+			try_slice_from_slice!(&result_item.block_data, end_idx as usize + 1.., to_write, buffer_len as usize..);
+			result_item.blocks
+		} else if end_idx == settings::FILE_BLOCK_SIZE - 1 {
+			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), start_block.into()]))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+			
+			let padding_start = std::cmp::min(result_item.block_data.len() as u64, start_idx);
+			to_write = vec![0; (start_idx + buffer_len) as usize];
+			try_slice_from_slice!(&result_item.block_data, 0..padding_start as usize, to_write, 0..padding_start as usize);
+			result_item.blocks
+		} else if start_block == end_block {
+			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), start_block.into()]))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+
+			let padding_start = std::cmp::min(result_item.block_data.len() as u64, start_idx);
+			let padding_end = result_item.block_data.len() as u64;
+			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
+			to_write = vec![0; (start_idx + buffer_len + padding_end) as usize];
+			try_slice_from_slice!(&result_item.block_data, 0..padding_start as usize, to_write, 0..padding_start as usize);
+			try_slice_from_slice!(&result_item.block_data, end_idx as usize + 1.., to_write, buffer_len as usize..);
+			result_item.blocks
+		} else {
+			let result = conn.query(commands::SQL_GET_SIZE_AND_BLOCK_DATA, Some(&vec![inode.into(), start_block.into(), end_block.into()]))?;
+			let result_item: &database_objects::FileWriteInfo = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+
+			let padding_start = std::cmp::min(result_item.start_block_data.len() as u64, start_idx);
+			let padding_end = result_item.end_block_data.len() as u64;
+			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
+			to_write = vec![0; (start_idx + buffer_len + padding_end) as usize];
+			to_write[0..padding_start as usize].copy_from_slice(&result_item.start_block_data[0..padding_start as usize]);
+			to_write[buffer_len as usize..].copy_from_slice(&result_item.end_block_data[end_idx as usize + 1..]);
+			result_item.blocks
+		};
+		let blocks: u64 = blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
+
+		if blocks < start_block + 1 {
+			conn.command(commands::SQL_PAD_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
+		}
+		if blocks < start_block { 
+			// Oh no... we need to pad the file up to the insertion point
+			let command = commands::dynamic_queries::sql_pad_until(inode, blocks + 1, start_block + 1);
+			conn.command(command.as_str(), None)?;
 		}
 
+		// Copy buffer
+		to_write[start_idx as usize..=((end_block - start_block) as usize * settings::FILE_BLOCK_SIZE_USIZE + end_idx as usize)].copy_from_slice(buffer);
+
+		// Convert data to a useful format
 		let mut data: Vec<_> = Vec::new();
 		let mut ptr = 0;
 		while ptr < to_write.len() {
@@ -416,7 +478,9 @@ impl TranslationLayer {
 			ptr += settings::FILE_BLOCK_SIZE_USIZE;
 		}
 
-		let command = commands::dynamic_queries::sql_unsafe_write(inode, start_block, end_block);
+		// Generate the insert query
+		let command = commands::dynamic_queries::sql_unsafe_write(inode, start_block + 1, end_block + 1);
+		// Now let's INSERT ... good luck
 		conn.command(command.as_str(), Some(&data))?;
 
 		Ok(())
@@ -491,7 +555,7 @@ impl TranslationLayer {
 		let block_count: u64 = file_head.bc.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
 		let new_block_count = new_size.div_ceil(settings::FILE_BLOCK_SIZE);
 		let strip_blocks_count = if block_count < new_block_count {
-			conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
+			conn.command(commands::SQL_RESIZE_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
 			conn.command(commands::dynamic_queries::sql_pad_file(
 				inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?,
 				file_head.last_block_id,
@@ -507,7 +571,7 @@ impl TranslationLayer {
 		if strip_blocks_count != 0 {
 			conn.command(commands::SQL_TRIM_BLOCKS, Some(&vec![inode.into(), strip_blocks_count.into()]))?;
 		}
-		conn.command(commands::SQL_TRIM_LAST_BLOCK, Some(&vec![new_last_block_size.into(), new_last_block_size.into(), inode.into()]))?;
+		conn.command(commands::SQL_RESIZE_LAST_BLOCK, Some(&vec![new_last_block_size.into(), new_last_block_size.into(), inode.into()]))?;
 
 		Ok(())
 	}
@@ -669,6 +733,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn getattr_larger_file() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let attr = sql.getattr(3).unwrap();
@@ -703,6 +768,7 @@ mod test {
 	}
 
 	#[test]
+	#[serial]
 	fn lookup_01() {
 		let mut sql = TranslationLayer::new().unwrap();
 		let entry = sql.lookup(&OsString::from("test.txt"), 1).unwrap();
@@ -819,15 +885,6 @@ mod test {
 
 	#[test]
 	#[serial]
-	fn write_to_file_03() {
-		let mut sql = TranslationLayer::new().unwrap();
-		let buffer: &[u8] = &"bbbb\n".as_bytes();
-		let write = sql.write(3, 4096 * 3 + 1, buffer);
-		assert!(match write { Ok(()) => { eprintln!("returned ok - should have failed"); false}, Err(Error::ClientError(OOB_WRITE)) => true, Err(_) => false });
-	}
-
-	#[test]
-	#[serial]
 	fn resize_01() {
 		let mut sql = TranslationLayer::new().unwrap();
 		sql.resize(3, 4096 * 3 + 3).unwrap();
@@ -856,5 +913,110 @@ mod test {
 		sql.write(3, 4096 * 3, &['a' as u8, 'a' as u8, 'a' as u8,'a' as u8, '\n' as u8]).unwrap();
 		let read_bytes = sql.read(3, 0, original).unwrap();
 		assert_eq!(read_bytes, 4096 * 3 + 5);
+	}
+
+	#[test]
+	#[serial]
+	fn write_01() {
+		// END PAD
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 4096, &[1_u8; 1024]).unwrap();
+		let read = &mut [0_u8; 4096];
+		let read_bytes = sql.read(3, 4096, read).unwrap();
+		sql.unsafe_write(3, 4096, &[0_u8; 1024]).unwrap();
+		let mut target = Vec::from([1_u8; 1024]);
+		target.extend_from_slice(&[0_u8; 4096 - 1024]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096);
+	}
+
+	#[test]
+	#[serial]
+	fn write_02() {
+		// START PAD
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 4096*2-1024, &[1_u8; 1024]).unwrap();
+		let read = &mut [0_u8; 4096];
+		let read_bytes = sql.read(3, 4096, read).unwrap();
+		sql.unsafe_write(3, 4096*2-1024, &[0_u8; 1024]).unwrap();
+		let mut target = Vec::from([0_u8; 4096-1024]);
+		target.extend_from_slice(&[1_u8; 1024]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096);
+	}
+
+	#[test]
+	#[serial]
+	fn write_03() {
+		// ALIGNED
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 0, &[1_u8; 2*4096]).unwrap();
+		let read = &mut [0_u8; 4096*2];
+		let read_bytes = sql.read(3, 0, read).unwrap();
+		sql.unsafe_write(3, 0, &[0_u8; 2*4096]).unwrap();
+		let target = Vec::from([1_u8; 4096*2]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096*2);
+	}
+
+	#[test]
+	#[serial]
+	fn write_04() {
+		// END PAD
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 0, &[1_u8; 2*4096-1]).unwrap();
+		let read = &mut [0_u8; 4096*2];
+		let read_bytes = sql.read(3, 0, read).unwrap();
+		sql.unsafe_write(3, 0, &[0_u8; 2*4096-1]).unwrap();
+		let mut target = Vec::from([1_u8; 4096*2-1]);
+		target.extend_from_slice(&[0_u8; 1]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096*2);
+	}
+
+	#[test]
+	#[serial]
+	fn disjoint_write_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 4096 * 4, &[2_u8; 4096]).unwrap();
+		let read = &mut [0_u8; 4096*2];
+		let read_bytes = sql.read(3, 4096 * 3, read).unwrap();
+		sql.resize(3, 4096 * 3 + 5).unwrap();
+		let mut target: Vec<u8> = Vec::from(['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]);
+		target.extend_from_slice(&[0_u8; 4096 - 5]);
+		target.extend_from_slice(&[2_u8; 4096]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096*2);
+	}
+
+	#[test]
+	#[serial]
+	fn disjoint_write_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 4096 * 5, &[2_u8; 4096]).unwrap();
+		let read = &mut [0_u8; 4096*3];
+		let read_bytes = sql.read(3, 4096 * 3, read).unwrap();
+		sql.resize(3, 4096 * 3 + 5).unwrap();
+		let mut target: Vec<u8> = Vec::from(['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]);
+		target.extend_from_slice(&[0_u8; 4096 - 5 + 4096]);
+		target.extend_from_slice(&[2_u8; 4096]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096*3);
+	}
+
+	#[test]
+	#[serial]
+	fn disjoint_write_03() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.unsafe_write(3, 4096 * 9, &[2_u8; 4096]).unwrap();
+		let read = &mut [0_u8; 4096*8];
+		let read_bytes = sql.read(3, 4096 * 3, read).unwrap();
+		sql.resize(3, 4096 * 3 + 5).unwrap();
+		let mut target: Vec<u8> = Vec::from(['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]);
+		target.extend_from_slice(&[0_u8; 4096 - 5 + 4096 * 5]);
+		target.extend_from_slice(&[2_u8; 4096]);
+		target.extend_from_slice(&[0_u8; 4096]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4096*7);
 	}
 }
