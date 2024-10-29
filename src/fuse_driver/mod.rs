@@ -4,9 +4,12 @@ use crate::settings;
 use crate::sql_translation_layer::MAX_NAME_LEN;
 use crate::sql_translation_layer::driver_objects;
 use crate::sql_translation_layer::TranslationLayer;
+use crate::sql_translation_layer::Error;
 use crate::debug;
 
 use fuser;
+use libc::EINTR;
+use libc::EIO;
 use libc::{EINVAL, ENOENT, ENOTEMPTY};
 
 use std::ffi::OsStr;
@@ -78,6 +81,19 @@ impl Into<fuser::FileAttr> for driver_objects::FileAttr {
 			rdev: 0,
 			blksize: 4096,
 			flags: 0,
+		}
+	}
+}
+
+impl Into<i32> for Error {
+	fn into(self) -> i32 {
+	    match self {
+			Self::DbConnectorError(_) => EIO,
+			Self::DbLockError => EIO,
+			Self::NotFoundError(_) => ENOENT,
+			Self::ClientError(_) => EINVAL,
+			Self::Unimplemented => EINTR,
+			Self::RuntimeError(_) => EIO
 		}
 	}
 }
