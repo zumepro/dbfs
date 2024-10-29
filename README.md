@@ -54,7 +54,7 @@ Build/test recipes can be viewed with `just -l`.
 
 
 ## Running
-To start a clean production containerized DB type:
+To start a clean production containerized DB - type:
 ```bash
 just prepare
 ```
@@ -78,7 +78,7 @@ just prepare_int
 ```
 2. Run integration tests
 ```bash
-just test_int
+just test
 ```
 3. Stop and clean integration testing environment
 ```bash
