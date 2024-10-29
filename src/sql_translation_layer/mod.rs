@@ -446,7 +446,7 @@ impl TranslationLayer {
 			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
 			to_write = vec![0; (start_idx + buffer_len + padding_end) as usize];
 			try_slice_from_slice!(&result_item.block_data, 0..padding_start as usize, to_write, 0..padding_start as usize);
-			try_slice_from_slice!(&result_item.block_data, end_idx as usize + 1.., to_write, buffer_len as usize..);
+			try_slice_from_slice!(&result_item.block_data, end_idx as usize + 1.., to_write, padding_start as usize + buffer_len as usize..);
 			result_item.blocks
 		} else {
 			let result = conn.query(commands::SQL_GET_SIZE_AND_BLOCK_DATA, Some(&vec![inode.into(), start_block.into(), end_block.into()]))?;
@@ -456,8 +456,8 @@ impl TranslationLayer {
 			let padding_end = result_item.end_block_data.len() as u64;
 			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
 			to_write = vec![0; (start_idx + buffer_len + padding_end) as usize];
-			to_write[0..padding_start as usize].copy_from_slice(&result_item.start_block_data[0..padding_start as usize]);
-			to_write[buffer_len as usize..].copy_from_slice(&result_item.end_block_data[end_idx as usize + 1..]);
+			try_slice_from_slice!(&result_item.start_block_data, 0..padding_start as usize, to_write, 0..padding_start as usize);
+			try_slice_from_slice!(&result_item.end_block_data, end_idx as usize + 1.., to_write, padding_start as usize + buffer_len as usize..);
 			result_item.blocks
 		};
 		let blocks: u64 = blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
@@ -1030,5 +1030,21 @@ mod test {
 		target.extend_from_slice(&[0_u8; 4096]);
 		assert_eq!(read, target.as_slice());
 		assert_eq!(read_bytes, 4096*7);
+	}
+
+	#[test]
+	#[serial]
+	fn disjoint_write_04() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.resize(3, 0).unwrap();
+		sql.unsafe_write(3, 4436, &[2_u8; 8]).unwrap();
+		let read = &mut [0_u8; 4436 + 8];
+		let read_bytes = sql.read(3, 0, read).unwrap();
+		sql.unsafe_write(3, 0, &[0_u8; 4096 * 3]).unwrap();
+		sql.unsafe_write(3, 4096 * 3, &['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]).unwrap();
+		let mut target: Vec<u8> = Vec::from(&[0_u8; 4436]);
+		target.extend_from_slice(&[2_u8; 8]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4436 + 8);
 	}
 }
