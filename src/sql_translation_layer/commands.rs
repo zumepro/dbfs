@@ -118,6 +118,14 @@ WHERE `id` = ?"#;
 
 
 /// # Binds
+/// - `id`
+pub const SQL_UPDATE_INODE_CTIME_MTIME: &'static str = r#"UPDATE `inode` SET
+`modified_at` = CURRENT_TIMESTAMP(),
+`created_at` = CURRENT_TIMESTAMP()
+WHERE `id` = ?"#;
+
+
+/// # Binds
 /// - `owner`
 /// - `group`
 /// - `file_type`

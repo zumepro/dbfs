@@ -28,7 +28,9 @@ pub struct TranslationLayer (Mutex<DbConnector>);
 #[derive(Debug)]
 pub enum Error {
 	DbConnectorError(DbConnectorError),
+	DbLockError,
 	RuntimeError(&'static str),
+	NotFoundError(&'static str),
 	ClientError(&'static str),
 	Unimplemented,
 }
@@ -41,7 +43,9 @@ impl std::fmt::Display for Error {
 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "sql_translation_error: {} (consider running fsck)", match self {
 			Self::DbConnectorError(val) => val.to_string(),
+			Self::DbLockError => CONN_LOCK_FAILED.to_string(),
 			Self::RuntimeError(val) => val.to_string(),
+			Self::NotFoundError(val) => val.to_string(),
 			Self::ClientError(val) => val.to_string(),
 			Self::Unimplemented => "method isn't implemented yet".to_string(),
 		})
@@ -77,7 +81,7 @@ impl TranslationLayer {
 	/// # Warnings
 	/// This function DOES NOT check whether the inode actually is a regular file or symlink.
 	pub fn filesize(&mut self, inode: u64) -> Result<driver_objects::FileSize, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let Ok(size) = conn.query(commands::SQL_GET_FILE_SIZE, Some(&vec![inode.into()])) else {
 			return Ok(FileSize { bytes: 0, blocks: 0 }.into())
 		};
@@ -98,7 +102,7 @@ impl TranslationLayer {
 	/// # Warnings
 	/// This does not check whether the inode is a regular file or a symlink.
 	pub fn count_hardlinks(&mut self, inode: u64) -> Result<u32, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let hardlinks: Vec<FileHardlinks> = conn.query(commands::SQL_COUNT_HARDLINKS, Some(&vec![inode.into()]))?;
 		let hardlinks = hardlinks.get(0).ok_or(Error::RuntimeError("could not count hardlinks"))?.hardlinks;
 		Ok(hardlinks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?)
@@ -113,7 +117,7 @@ impl TranslationLayer {
 	/// # Warnings
 	/// This does not check whether the inode is a directory.
 	pub fn count_subdirs(&mut self, inode: u64) -> Result<u32, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let subdirs: Vec<DirectoryChildrenDirectory> = conn.query(commands::SQL_COUNT_CHILDREN_OF_TYPE_DIRECTORY, Some(&vec![inode.into()]))?;
 		let subdirs = subdirs.get(0).ok_or(Error::RuntimeError("could not count subdirectories"))?.children_dirs;
 		Ok((subdirs + 2).try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?)
@@ -128,12 +132,12 @@ impl TranslationLayer {
 	/// # Warnings
 	/// This is a relatively expensive operation, so use as sparingly as possible.
 	pub fn getattr(&mut self, _inode: u64) -> Result<driver_objects::FileAttr, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let inode: Vec<Inode> = conn.query(commands::SQL_GET_INODE, Some(&vec![_inode.into()]))?;
 		drop(conn);
 
 		let Some(inode) = inode.get(0) else {
-			return Err(Error::RuntimeError("no inode found with given id"));
+			return Err(Error::NotFoundError("no inode found with given id"));
 		};
 
 		let file_type: database_enums::FileType = (&inode.file_type).into();
@@ -187,9 +191,9 @@ impl TranslationLayer {
 	pub fn lookup_id(&mut self, name: &std::ffi::OsStr, parent_inode: u64) -> Result<u64, Error> {
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let inode: Vec<database_objects::InodeLookup> = conn.query(commands::SQL_LOOKUP_INODE_ID, Some(&vec![path.into(), parent_inode.into()]))?;
-		let inode: &database_objects::InodeLookup = inode.get(0).ok_or(Error::RuntimeError("could not read inode ID"))?;
+		let inode: &database_objects::InodeLookup = inode.get(0).ok_or(Error::NotFoundError("could not read inode ID"))?;
 
 		Ok(inode.inode_id.into())
 	}
@@ -220,7 +224,7 @@ impl TranslationLayer {
 	/// This function DOES NOT check if the given `inode` id belongs to a directory (or a
 	/// different filetype). Nor does it check whether the parent is a directory.
 	pub fn readdir(&mut self, inode: u64) -> Result<Vec<driver_objects::DirectoryEntry>, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let listing: Vec<database_objects::DirectoryEntry> = conn.query(commands::SQL_LIST_DIRECTORY, Some(&vec![inode.into()]))?;
 		let parent: u32 = DbConnector::query::<database_objects::DirectoryParent>(&mut conn, commands::SQL_GET_DIRECTORY_PARENT, Some(&vec![inode.into()]))?.get(0).ok_or(Error::RuntimeError("could not find the parent file on readdir"))?.parent_inode_id;
@@ -253,7 +257,7 @@ impl TranslationLayer {
 	/// This function DOES NOT check if the given `inode` id belongs to a directory (or a
 	/// different filetype).
 	pub fn count_children(&mut self, inode: u64) -> Result<u64, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let count: Vec<database_objects::ChildrenCount> = conn.query(commands::SQL_COUNT_DIRECTORY_CHILDREN, Some(&vec![inode.into()]))?;
 		let count: &database_objects::ChildrenCount = count.get(0).ok_or(Error::RuntimeError("could not determine children count"))?;
@@ -277,7 +281,7 @@ impl TranslationLayer {
 	/// Besides regular errors this function can return [`Error::ClientError`]`("pointer out of
 	/// range")`
 	pub fn read(&mut self, inode: u64, offset: u64, buffer: &mut [u8]) -> Result<usize, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let max_bytes = buffer.len();
 		let max_blocks = (max_bytes.div_ceil(settings::FILE_BLOCK_SIZE_USIZE) + 1_usize) as u64;
@@ -306,7 +310,7 @@ impl TranslationLayer {
 	/// fields may be completely made up, as the driver assumes that the SQL backend provides
 	/// unlimited resources.
 	pub fn statfs(&mut self) -> Result<driver_objects::FilesystemStat, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let stat: Vec<database_objects::FilesystemStat> = conn.query(commands::SQL_GET_FS_STAT, None)?;
 		let stat: &database_objects::FilesystemStat = stat.get(0).ok_or(Error::RuntimeError("could not determine fs stat"))?;
 		
@@ -327,7 +331,7 @@ impl TranslationLayer {
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &[u8]` is the source buffer
 	pub fn write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let length = buffer.len();
 		if length == 0 { return Ok(()); }
@@ -395,7 +399,7 @@ impl TranslationLayer {
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &[u8]` is the source buffer
 	pub fn unsafe_write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let buffer_len = buffer.len() as u64;
 		if buffer.len() == 0 { return Ok(()); }
@@ -412,13 +416,13 @@ impl TranslationLayer {
 		let mut to_write: Vec<u8>;
 		let blocks = if start_idx == 0 && end_idx == settings::FILE_BLOCK_SIZE - 1 {
 			let result = conn.query(commands::SQL_GET_SIZE_ONLY, Some(&vec![inode.into()]))?;
-			let result_item: &database_objects::FileWriteInfoSizeOnly = result.get(0).ok_or(Error::RuntimeError("could not get filesize"))?;
+			let result_item: &database_objects::FileWriteInfoSizeOnly = result.get(0).ok_or(Error::NotFoundError("could not get filesize"))?;
 
 			to_write = vec![0; buffer_len as usize];
 			result_item.blocks
 		} else if start_idx == 0 {
 			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), end_block.into()]))?;
-			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::NotFoundError("could not get filesize and block"))?;
 
 			let padding_end = result_item.block_data.len() as u64;
 			let padding_end = if end_idx >= padding_end { 0 } else { padding_end - end_idx - 1 };
@@ -427,7 +431,7 @@ impl TranslationLayer {
 			result_item.blocks
 		} else if end_idx == settings::FILE_BLOCK_SIZE - 1 {
 			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), start_block.into()]))?;
-			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::NotFoundError("could not get filesize and block"))?;
 			
 			let padding_start = std::cmp::min(result_item.block_data.len() as u64, start_idx);
 			to_write = vec![0; (start_idx + buffer_len) as usize];
@@ -435,7 +439,7 @@ impl TranslationLayer {
 			result_item.blocks
 		} else if start_block == end_block {
 			let result = conn.query(commands::SQL_GET_SIZE_AND_SINGLE_BLOCK_DATA, Some(&vec![inode.into(), start_block.into()]))?;
-			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+			let result_item: &database_objects::FileWriteInfoSingleBlock = result.get(0).ok_or(Error::NotFoundError("could not get filesize and block"))?;
 
 			let padding_start = std::cmp::min(result_item.block_data.len() as u64, start_idx);
 			let padding_end = result_item.block_data.len() as u64;
@@ -446,7 +450,7 @@ impl TranslationLayer {
 			result_item.blocks
 		} else {
 			let result = conn.query(commands::SQL_GET_SIZE_AND_BLOCK_DATA, Some(&vec![inode.into(), start_block.into(), end_block.into()]))?;
-			let result_item: &database_objects::FileWriteInfo = result.get(0).ok_or(Error::RuntimeError("could not get filesize and block"))?;
+			let result_item: &database_objects::FileWriteInfo = result.get(0).ok_or(Error::NotFoundError("could not get filesize and block"))?;
 
 			let padding_start = std::cmp::min(result_item.start_block_data.len() as u64, start_idx);
 			let padding_end = result_item.end_block_data.len() as u64;
@@ -495,7 +499,7 @@ impl TranslationLayer {
 	/// `kind: FileType` sets the inode type
 	/// `attr: FileSetAttr` sets the remaining inode attributes
 	pub fn mknod(&mut self, parent_inode: u64, name: &std::ffi::OsStr, kind: driver_objects::FileType, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let inode = conn.command(commands::SQL_CREATE_INODE, Some(&vec![
 			attr.uid.into(),
 			attr.gid.into(),
@@ -521,17 +525,18 @@ impl TranslationLayer {
 	pub fn link(&mut self, parent_inode: u64, name: &std::ffi::OsStr, dest_inode: u64) -> Result<(), Error> {
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_CREATE_FILE, Some(&vec![
 			parent_inode.into(),
 			path.into(),
 			dest_inode.into()
 		]))?;
-		drop(conn);
-		match status.rows_affected {
-			1 => Ok(()),
-			_ => Err(Error::RuntimeError("no changes made"))
+		if status.rows_affected != 1 {
+			return Err(Error::RuntimeError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![parent_inode.into()]))?;
+		Ok(())
 	}
 
 
@@ -541,7 +546,7 @@ impl TranslationLayer {
 	/// `inode: u64` specifies the inode
 	/// `new_size: u64` specifies the new size the file should have
 	pub fn resize(&mut self, inode: u64, new_size: u64) -> Result<(), Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		if new_size == 0 {
 			conn.command(commands::SQL_DROP_BLOCKS, Some(&vec![inode.into()]))?;
 			return Ok(());
@@ -549,7 +554,7 @@ impl TranslationLayer {
 
 		// Get the current file head
 		let file_head: Vec<database_objects::FileHead> = conn.query(commands::SQL_GET_FILE_HEAD, Some(&vec![inode.into()]))?;
-		let file_head = file_head.get(0).ok_or(Error::RuntimeError("could not get filesize"))?;
+		let file_head = file_head.get(0).ok_or(Error::NotFoundError("could not get filesize"))?;
 
 		// Pad with null blocks if necessary
 		let block_count: u64 = file_head.bc.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
@@ -583,7 +588,7 @@ impl TranslationLayer {
 	/// `inode: u64` specifies the inode
 	/// `attr: FileSetAttr` sets the inode attributes
 	pub fn setattr(&mut self, inode: u64, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
 			attr.uid.into(),
 			attr.gid.into(),
@@ -598,7 +603,7 @@ impl TranslationLayer {
 		]))?;
 		drop(conn);
 		if status.rows_affected != 1 {
-			return Err(Error::RuntimeError("no changes made"));
+			return Err(Error::NotFoundError("no changes made"));
 		}
 		
 		self.getattr(inode)
@@ -616,12 +621,14 @@ impl TranslationLayer {
 		let inode = self.lookup_id(name, parent_inode)?;
 		let path = name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_DELETE_FILE, Some(&vec![path.into(), parent_inode.into()]))?;
-		drop(conn);
 		if status.rows_affected != 1 {
-			return Err(Error::RuntimeError("no changes made"));
+			return Err(Error::NotFoundError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![parent_inode.into()]))?;
+		drop(conn);
 
 		let attr = self.getattr(inode)?;
 		let delete_inode = match (attr.hardlinks, attr.kind) {
@@ -633,7 +640,7 @@ impl TranslationLayer {
 			return Ok(());
 		}
 
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_DELETE_INODE, Some(&vec![inode.into()]))?;
 		match status.rows_affected {
 			1 => Ok(()),
@@ -653,13 +660,18 @@ impl TranslationLayer {
 		let src_path = src_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 		let dest_path = dest_name.to_str().ok_or(Error::RuntimeError("could not parse path"))?.to_string();
 
-		let mut conn = self.0.lock().map_err(|_| Error::RuntimeError(CONN_LOCK_FAILED))?;
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_RENAME_FILE, Some(&vec![dest_parent_inode.into(), dest_path.into(), src_parent_inode.into(), src_path.into()]))?;
-
-		match status.rows_affected {
-			1 => Ok(()),
-			_ => Err(Error::RuntimeError("no changes made"))
+		if status.rows_affected != 1 {
+			return Err(Error::NotFoundError("no changes made"));
 		}
+
+		let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![src_parent_inode.into()]))?;
+		if dest_parent_inode != src_parent_inode {
+			let _ = conn.command(commands::SQL_UPDATE_INODE_CTIME_MTIME, Some(&vec![dest_parent_inode.into()]))?;
+		}
+
+		Ok(())
 	}
 }
 
