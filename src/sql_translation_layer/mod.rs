@@ -1047,4 +1047,36 @@ mod test {
 		assert_eq!(read, target.as_slice());
 		assert_eq!(read_bytes, 4436 + 8);
 	}
+
+	#[test]
+	#[serial]
+	fn unsafe_write_bug_01_01() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.resize(3, 4096*2).unwrap();
+		sql.unsafe_write(3, 4436, &[2_u8; 8]).unwrap();
+		let read = &mut [0_u8; 4436 + 8];
+		let read_bytes = sql.read(3, 0, read).unwrap();
+		sql.unsafe_write(3, 0, &[0_u8; 4096 * 3]).unwrap();
+		sql.unsafe_write(3, 4096 * 3, &['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]).unwrap();
+		let mut target: Vec<u8> = Vec::from(&[0_u8; 4436]);
+		target.extend_from_slice(&[2_u8; 8]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4436 + 8);
+	}
+
+	#[test]
+	#[serial]
+	fn unsafe_write_bug_01_02() {
+		let mut sql = TranslationLayer::new().unwrap();
+		sql.resize(3, 4096*2).unwrap();
+		sql.unsafe_write(3, 4095, &[2_u8; 8]).unwrap();
+		let read = &mut [0_u8; 4095 + 8];
+		let read_bytes = sql.read(3, 0, read).unwrap();
+		sql.unsafe_write(3, 0, &[0_u8; 4096 * 3]).unwrap();
+		sql.unsafe_write(3, 4096 * 3, &['a' as u8, 'a' as u8, 'a' as u8, 'a' as u8, '\n' as u8]).unwrap();
+		let mut target: Vec<u8> = Vec::from(&[0_u8; 4095]);
+		target.extend_from_slice(&[2_u8; 8]);
+		assert_eq!(read, target.as_slice());
+		assert_eq!(read_bytes, 4095 + 8);
+	}
 }
