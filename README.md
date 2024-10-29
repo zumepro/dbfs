@@ -53,6 +53,18 @@ Absolutely sane project. A working fuse adapter for DB-based filesystem.
 Build/test recipes can be viewed with `just -l`.
 
 
+## Running
+To start a clean production containerized DB type:
+```bash
+just prepare
+```
+
+When done - type:
+```bash
+just stop
+```
+
+
 ## Integration testing
 To run integration tests:
 
@@ -62,7 +74,7 @@ sudo pacman -Syu podman perl perl-dbd-mysql just
 ```
 2. Setup integration testing environment with
 ```bash
-just prepare
+just prepare_int
 ```
 2. Run integration tests
 ```bash
