@@ -642,9 +642,10 @@ impl fuser::Filesystem for DbfsDriver {
 	}
 }
 
-pub fn run_forever(tl: TranslationLayer, mountpoint: &str, root: bool) -> ! {
+pub fn run_forever(tl: TranslationLayer, mountpoint: &str, root: bool, others: bool) -> ! {
 	let mut options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string()), fuser::MountOption::DefaultPermissions];
 	if root { options.push(fuser::MountOption::AllowRoot); }
+	if others { options.push(fuser::MountOption::AllowOther); }
 	let driver = DbfsDriver::new(tl);
 	fuser::mount2(driver, mountpoint, &options).unwrap();
 	panic!("FUSE driver crashed");
