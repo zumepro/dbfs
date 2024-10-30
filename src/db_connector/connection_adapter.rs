@@ -73,7 +73,7 @@ impl Adapter {
     pub async fn default() -> Result<Self, String> {
         Ok(Self (
             MySqlPool::connect_lazy(format!(
-                "mysql://{}:{}@{}/{}",
+                "mysql://{}:{}@{}/{}?ssl-mode=DISABLED",
                 settings::SQL_USER,
                 settings::SQL_PASSWD,
                 settings::SQL_HOST,
