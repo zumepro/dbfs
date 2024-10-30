@@ -6,12 +6,13 @@ pub const SQL_USER: &'static str = "dbfs";
 pub const SQL_PASSWD: &'static str = "dbfs";
 #[doc(hidden)]
 pub const SQL_DB: &'static str = "dbfs";
+#[doc(hidden)]
+pub const SQL_PARAMS: &'static str = "ssl-mode=DISABLED";
 
 
+#[cfg(not(feature = "integration_testing"))]
 macro_rules! block_size{
-    () => {
-        4096
-    }
+    () => { 4096 }
 }
 
 

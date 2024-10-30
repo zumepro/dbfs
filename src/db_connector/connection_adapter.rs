@@ -1,5 +1,6 @@
 use crate::settings;
 use crate::db_connector::chrono;
+use const_format::formatcp;
 use futures::TryStreamExt;
 use sqlx::{FromRow, MySql, MySqlPool, Pool};
 
@@ -72,13 +73,14 @@ impl Adapter {
 
     pub async fn default() -> Result<Self, String> {
         Ok(Self (
-            MySqlPool::connect_lazy(format!(
-                "mysql://{}:{}@{}/{}?ssl-mode=DISABLED",
+            MySqlPool::connect_lazy(formatcp!(
+                "mysql://{}:{}@{}/{}?{}",
                 settings::SQL_USER,
                 settings::SQL_PASSWD,
                 settings::SQL_HOST,
                 settings::SQL_DB,
-            ).as_str()).map_err(|err| format!("{}", err))?
+                settings::SQL_PARAMS,
+            )).map_err(|err| format!("{}", err))?
         ))
     }
 
