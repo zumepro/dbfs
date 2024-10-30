@@ -139,9 +139,9 @@ pub struct FileSetAttr {
 #[derive(Debug, PartialEq)]
 pub struct FileSize {
 	/// File size in bytes
-    pub bytes: i64,
+    pub bytes: u64,
 	/// File size in blocks
-    pub blocks: i64,
+    pub blocks: u64,
 }
 impl Into<FileSize> for database_objects::FileSize {
 	fn into(self) -> FileSize {

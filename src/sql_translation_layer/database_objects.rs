@@ -3,8 +3,8 @@ use crate::db_connector::{FromRow, chrono};
 
 #[derive(Debug, PartialEq, FromRow, Clone)]
 pub struct FileSize {
-    pub bytes: i64,
-    pub blocks: i64,
+    pub bytes: u64,
+    pub blocks: u64,
 }
 impl Copy for FileSize {}
 

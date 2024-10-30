@@ -1,18 +1,20 @@
 //! SQL Command for use in `sql_translation_layer` module
 
 
+use const_format::formatcp;
+use crate::settings;
+
+
 /// # Binds
 /// - `inode_id`
 ///
 /// # Columns
 /// - `bytes`
 /// - `blocks`
-pub const SQL_GET_FILE_SIZE: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`), `file_tmp` (`blocks`) AS (
-    SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)
-) SELECT
-    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
-    `blocks` AS blocks
-FROM `file_tmp`"#;
+pub const SQL_GET_FILE_SIZE: &'static str = formatcp!(r#"SELECT
+	(`block_id` - 1) * {block_size} + OCTET_LENGTH(`data`) as `bytes`,
+	`block_id` as `blocks`
+FROM `block` WHERE `inode_id` = ? ORDER BY `block_id` DESC LIMIT 1"#, block_size=settings::FILE_BLOCK_SIZE);
 
 
 /// # Binds
@@ -22,13 +24,13 @@ FROM `file_tmp`"#;
 /// - `bytes`
 /// - `blocks`
 /// - `last_block_id`
-pub const SQL_GET_SIZE_AND_HEAD: &'static str = r#"WITH `ino` AS (SELECT ? AS `ino`), `file_tmp` (`blocks`) AS (
+pub const SQL_GET_SIZE_AND_HEAD: &'static str = formatcp!(r#"WITH `ino` AS (SELECT ? AS `ino`), `file_tmp` (`blocks`) AS (
     SELECT COUNT(*) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`)
 ) SELECT
-    `blocks` * 4096 - (SELECT 4096 - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
+    `blocks` * {block_size} - (SELECT {block_size} - OCTET_LENGTH(`data`) FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1) AS bytes,
     `blocks` AS blocks,
     (IFNULL((SELECT `block_id` FROM `block` WHERE `inode_id` = (SELECT `ino` FROM `ino`) ORDER BY `block_id` DESC LIMIT 1), CAST(0 AS UNSIGNED))) AS `last_block_id`
-FROM `file_tmp`"#;
+FROM `file_tmp`"#, block_size=settings::FILE_BLOCK_SIZE);
 
 
 /// # Binds
@@ -267,6 +269,8 @@ pub const SQL_DROP_BLOCKS: &'static str = r#"DELETE FROM `block` WHERE `inode_id
 
 
 pub mod dynamic_queries {
+    use const_format::formatcp;
+    use crate::settings;
     use crate::sql_translation_layer::database_objects;
 
     /// # Binds
@@ -313,7 +317,7 @@ pub mod dynamic_queries {
             query.push_str(&inode_id);
             query.push_str(", ");
             query.push_str(&block_id.to_string());
-            query.push_str(", REPEAT(CHAR(0), 4096)),");
+            query.push_str(formatcp!(", REPEAT(CHAR(0), {block_size})),", block_size=settings::FILE_BLOCK_SIZE));
         }
         query.pop();
         query.push_str(" ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
@@ -328,7 +332,7 @@ pub mod dynamic_queries {
             query.push_str(&inode_id.to_string());
             query.push_str(", ");
             query.push_str(&(last_block_id + block).to_string());
-            query.push_str(", REPEAT(CHAR(0), 4096)),");
+            query.push_str(formatcp!(", REPEAT(CHAR(0), {block_size})),", block_size=settings::FILE_BLOCK_SIZE));
         }
         query.pop();
         query
