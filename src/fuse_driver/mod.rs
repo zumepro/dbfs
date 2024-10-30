@@ -178,7 +178,7 @@ impl fuser::Filesystem for DbfsDriver {
 		match tl.read(inode, offset as u64, &mut buf) {
 			Ok(read_bytes) => {
 				debug!(" -> OK (read {})", read_bytes);
-				reply.data(&buf);
+				reply.data(&buf[..read_bytes]);
 			},
 			Err(err) => {
 				debug!(" -> Err {:?}", &err);
