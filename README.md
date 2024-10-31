@@ -56,7 +56,7 @@ Build/test recipes can be viewed with `just -l`.
 ## Running
 To start a clean production containerized DB - type:
 ```bash
-just prepare
+just prepare mysql
 ```
 
 When done - type:
@@ -74,11 +74,11 @@ sudo pacman -Syu podman perl perl-dbd-mysql just
 ```
 2. Setup integration testing environment with
 ```bash
-just prepare_int
+just prepare_int mysql
 ```
 2. Run integration tests
 ```bash
-just test
+just test mysql
 ```
 3. Stop and clean integration testing environment
 ```bash
