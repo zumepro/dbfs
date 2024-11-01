@@ -5,7 +5,7 @@ SET time_zone = "+00:00";
 CREATE TABLE `block` (
   `inode_id` int(10) UNSIGNED NOT NULL,
   `block_id` int(10) UNSIGNED NOT NULL,
-  `data` blob NOT NULL
+  `data` longblob NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES
