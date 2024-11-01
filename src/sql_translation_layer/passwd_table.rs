@@ -40,12 +40,14 @@ impl PasswdTable {
 	    let user_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read user from passwd"))?;
 	    let user_name_converted = user_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
 	    conn.command(commands::SQL_INSERT_USER, Some(&vec![user.into(), user_name_converted.into()]))?;
+	    self.users.insert(user, user_name_converted.to_string());
 	}
 
 	if ! exists.0 {
 	    let group_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
 	    let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
 	    conn.command(commands::SQL_INSERT_GROUP, Some(&vec![user.into(), group_name_converted.into()]))?;
+	    self.groups.insert(group, group_name_converted.to_string());
 	}
 
 	Ok(())
