@@ -6,6 +6,34 @@ use crate::settings;
 
 
 /// # Binds
+///
+/// # Columns
+/// - `id`
+/// - `name`
+pub const SQL_GET_USERS: &'static str = r#"SELECT * FROM `user`"#;
+
+
+/// # Binds
+///
+/// # Columns
+/// - `id`
+/// - `name`
+pub const SQL_GET_GROUPS: &'static str = r#"SELECT * FROM `group`"#;
+
+
+/// # Binds
+/// - `user_id`
+/// - `user_name`
+pub const SQL_INSERT_USER: &'static str = r#"INSERT INTO `user` (`id`, `name`) VALUES (?, ?)"#;
+
+
+/// # Binds
+/// - `group_id`
+/// - `group_name`
+pub const SQL_INSERT_GROUP: &'static str = r#"INSERT INTO `group` (`id`, `name`) VALUES (?, ?)"#;
+
+
+/// # Binds
 /// - `inode_id`
 ///
 /// # Columns

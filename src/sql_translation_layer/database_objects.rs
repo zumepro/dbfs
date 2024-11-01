@@ -117,5 +117,19 @@ pub struct FileWriteInfoSingleBlock {
 
 #[derive(Debug, PartialEq, FromRow)]
 pub struct FileWriteInfoSizeOnly {
-	pub blocks: i64,
+    pub blocks: i64,
+}
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct User {
+    pub id: u32,
+    pub name: String,
+}
+
+
+#[derive(Debug, PartialEq, FromRow)]
+pub struct Group {
+    pub id: u32,
+    pub name: String,
 }

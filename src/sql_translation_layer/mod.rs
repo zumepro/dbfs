@@ -2,6 +2,7 @@ mod database_objects;
 mod database_enums;
 pub mod driver_objects;
 mod commands;
+mod passwd_table;
 
 
 use crate::{db_connector::chrono, settings};
@@ -18,11 +19,11 @@ pub const MAX_NAME_LEN: u32 = 255;
 
 
 use database_objects::{DirectoryChildrenDirectory, FileHardlinks, FileSize, FileSizeAndHead, Inode};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use crate::db_connector::{DbConnector, DbConnectorError};
 
 
-pub struct TranslationLayer (Mutex<DbConnector>);
+pub struct TranslationLayer (Mutex<DbConnector>, RwLock<>);
 
 
 #[derive(Debug)]
