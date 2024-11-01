@@ -445,7 +445,7 @@ impl fuser::Filesystem for DbfsDriver {
 			}
 		};
 
-		if let Err(err) = tl.write(attr.ino.into(), 0, target) {
+		if let Err(err) = tl.unsafe_write(attr.ino.into(), 0, target) {
 			debug!(" -> Err while writing symlink data: {:?}", &err);
 			reply.error(ENOENT);
 			return
