@@ -116,7 +116,7 @@ ALTER TABLE `inode`
   ADD KEY `inode_special_bits` (`special_bits`),
   ADD KEY `inode_user_perm` (`user_perm`);
 INSERT INTO `inode` (`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
-(1, 1, 1, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52');
+(1, 0, 0, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52');
 
 ALTER TABLE `permissions`
   ADD PRIMARY KEY (`id`);
