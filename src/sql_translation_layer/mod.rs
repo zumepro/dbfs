@@ -9,6 +9,7 @@ use crate::{db_connector::chrono, settings};
 
 
 const CONN_LOCK_FAILED: &'static str = "could not lock onto the database connection (this could be a synchronization error)";
+const PASSWD_LOCK_FAILED: &'static str = "could not lock onto the local passwd table object";
 const DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert database's i64 to u32 for the driver";
 const DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE: &'static str = "could not convert driver's u64 to u32 for the database";
 const OOB_WRITE: &'static str = "write is possibly out of bounds";
@@ -22,8 +23,10 @@ use database_objects::{DirectoryChildrenDirectory, FileHardlinks, FileSize, File
 use std::sync::Mutex;
 use crate::db_connector::{DbConnector, DbConnectorError};
 
+use self::passwd_table::PasswdTable;
 
-pub struct TranslationLayer (Mutex<DbConnector>);
+
+pub struct TranslationLayer (Mutex<DbConnector>, Mutex<PasswdTable>);
 
 
 #[derive(Debug)]
@@ -68,8 +71,11 @@ impl TranslationLayer {
 	/// Create a [`TranslationLayer`] object and use the defaults from [`crate::settings`] to
 	/// login to the database
 	pub fn new() -> Result<Self, Error> {
+		let dbconn = Mutex::new(DbConnector::default()?);
+		let passwdtab = Mutex::new(PasswdTable::new(&dbconn)?);
 		Ok(Self (
-			Mutex::new(DbConnector::default()?)
+			dbconn,
+			passwdtab,
 		))
 	}
 	
@@ -500,6 +506,7 @@ impl TranslationLayer {
 	/// `kind: FileType` sets the inode type
 	/// `attr: FileSetAttr` sets the remaining inode attributes
 	pub fn mknod(&mut self, parent_inode: u64, name: &std::ffi::OsStr, kind: driver_objects::FileType, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		self.1.lock().map_err(|_| Error::RuntimeError(PASSWD_LOCK_FAILED))?.check(&self.0, attr.uid, attr.gid)?;
 		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let inode = conn.command(commands::SQL_CREATE_INODE, Some(&vec![
 			attr.uid.into(),
@@ -589,6 +596,7 @@ impl TranslationLayer {
 	/// `inode: u64` specifies the inode
 	/// `attr: FileSetAttr` sets the inode attributes
 	pub fn setattr(&mut self, inode: u64, attr: driver_objects::FileSetAttr) -> Result<driver_objects::FileAttr, Error> {
+		self.1.lock().map_err(|_| Error::RuntimeError(PASSWD_LOCK_FAILED))?.check(&self.0, attr.uid, attr.gid)?;
 		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 		let status = conn.command(commands::SQL_UPDATE_INODE, Some(&vec![
 			attr.uid.into(),
