@@ -71,7 +71,7 @@ impl PasswdTable {
         self.users.insert(user, user_name_converted.to_string());
     }
 
-    if ! exists.0 {
+    if ! exists.1 {
         let group_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
         let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
         debug!("ownermgr: groupadd: Adding group \"{}\" with gid {}", group_name_converted, group);
