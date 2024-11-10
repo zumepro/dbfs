@@ -40,11 +40,11 @@ impl PasswdTable {
 
 	for user in users.iter() {
 	    this.users.insert(user.id, user.name.clone());
-	    debug!("    fetch user \"{}\" ({})", user.name, user.id);
+	    debug!("    fetch user \"{}\" ({})", user.name.clone(), user.id);
 	}
 	for group in groups.iter() {
 	    this.groups.insert(group.id, group.name.clone());
-	    debug!("    fetch group \"{}\" ({})", group.name, group.id);
+	    debug!("    fetch group \"{}\" ({})", group.name.clone(), group.id);
 	}
 	debug!("ownermgr: done table initialization");
 
