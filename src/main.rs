@@ -20,18 +20,24 @@ macro_rules! debug {
 	}
 }
 
-fn mount(args: cmd_args::ArgMount) {
+fn create_driver() -> Option<fuse_driver::DbfsDriver> {
 	debug!("connecting to db...");
 	let tl = match sql_translation_layer::TranslationLayer::new() {
 		Ok(val) => val,
 		Err(err) => {
 			eprintln!("{}", err);
-			return;
+			return None;
 		}
 	};
 
 	debug!("starting FUSE driver");
-	fuse_driver::run_forever(tl, &args.mountpoint, args.allow_root, args.allow_other);
+	Some(fuse_driver::DbfsDriver::new(tl))
+}
+
+fn mount(args: cmd_args::ArgMount) {
+	if let Some(driver) = create_driver() {
+		driver.run_forever(&args.mountpoint, args.allow_root, args.allow_other);
+	}
 }
 
 fn main() {

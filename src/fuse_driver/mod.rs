@@ -98,7 +98,7 @@ impl Into<i32> for Error {
 	}
 }
 
-struct DbfsDriver {
+pub struct DbfsDriver {
 	tl: Arc<Mutex<TranslationLayer>>,
 	last_readdir_inode: u64,
 	last_readdir: Vec<driver_objects::DirectoryEntry>,
@@ -106,7 +106,7 @@ struct DbfsDriver {
 }
 
 impl DbfsDriver {
-	fn new(tl: TranslationLayer) -> Self {
+	pub fn new(tl: TranslationLayer) -> Self {
 		let tl = Arc::new(Mutex::new(tl));
 
 		Self {
@@ -115,6 +115,14 @@ impl DbfsDriver {
 			last_readdir: Vec::new(),
 			cache: cache::WriteCache::new(tl.clone(), 1 << 20)
 		}
+	}
+
+	pub fn run_forever(self, mountpoint: &str, root: bool, others: bool) -> ! {
+		let mut options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string()), fuser::MountOption::DefaultPermissions];
+		if root { options.push(fuser::MountOption::AllowRoot); }
+		if others { options.push(fuser::MountOption::AllowOther); }
+		fuser::mount2(self, mountpoint, &options).unwrap();
+		panic!("FUSE driver crashed");
 	}
 }
 
@@ -656,14 +664,5 @@ impl fuser::Filesystem for DbfsDriver {
 		debug!(" -> OK");
 		reply.written(data.len() as u32);
 	}
-}
-
-pub fn run_forever(tl: TranslationLayer, mountpoint: &str, root: bool, others: bool) -> ! {
-	let mut options = vec![fuser::MountOption::RW, fuser::MountOption::FSName("dbfs".to_string()), fuser::MountOption::DefaultPermissions];
-	if root { options.push(fuser::MountOption::AllowRoot); }
-	if others { options.push(fuser::MountOption::AllowOther); }
-	let driver = DbfsDriver::new(tl);
-	fuser::mount2(driver, mountpoint, &options).unwrap();
-	panic!("FUSE driver crashed");
 }
 
