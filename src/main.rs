@@ -20,9 +20,7 @@ macro_rules! debug {
 	}
 }
 
-fn main() {
-	let args = cmd_args::parse();
-
+fn mount(args: cmd_args::ArgMount) {
 	debug!("connecting to db...");
 	let tl = match sql_translation_layer::TranslationLayer::new() {
 		Ok(val) => val,
@@ -34,6 +32,14 @@ fn main() {
 
 	debug!("starting FUSE driver");
 	fuse_driver::run_forever(tl, &args.mountpoint, args.allow_root, args.allow_other);
+}
+
+fn main() {
+	let args = cmd_args::parse();
+
+	match args.command {
+		cmd_args::ArgCommand::Mount(args) => mount(args)
+	}
 }
 
 
