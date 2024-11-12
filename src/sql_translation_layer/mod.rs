@@ -682,6 +682,17 @@ impl TranslationLayer {
 
 		Ok(())
 	}
+
+	/// Erases the entire filesystem, creates the root user & group and creates the root directory.
+	pub fn format(&mut self) -> Result<(), Error> {
+		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
+
+		for cmd in commands::SQL_FORMAT_DELETE_SEQUENCE {
+			conn.command(cmd, None)?;
+		}
+
+		Ok(())
+	}
 }
 
 

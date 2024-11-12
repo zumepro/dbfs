@@ -366,3 +366,22 @@ pub mod dynamic_queries {
         query
     }
 }
+
+pub const SQL_FORMAT_DELETE_SEQUENCE: &'static [&'static str] = &[
+	"DELETE FROM `block`",
+	"DELETE FROM `file`",
+	"DELETE FROM `inode`",
+	"DELETE FROM `user`",
+	"DELETE FROM `group`",
+	"INSERT INTO `user` (`id`, `name`) VALUES (1, 'root'), (1000, 'user')",
+	"INSERT INTO `group` (`id`, `name`) VALUES (1, 'root'), (1000, 'user')",
+	"UPDATE `user` SET `id` = 0 WHERE `name` = 'root'",
+	"UPDATE `group` SET `id` = 0 WHERE `name` = 'root'",
+	"INSERT INTO `inode`
+		(`id`, `owner`, `group`, `file_type`, `special_bits`, `user_perm`, `group_perm`, `other_perm`, `created_at`, `modified_at`, `accessed_at`) VALUES
+		(1, 0, 0, 'd', 0, 7, 5, 5, '2024-10-24 17:52:52', '2024-10-24 17:53:10', '2024-10-24 17:52:52')",
+	"INSERT INTO `file`
+		(`parent_inode_id`, `name`, `inode_id`) VALUES
+		(1, '/', 1)"
+];
+

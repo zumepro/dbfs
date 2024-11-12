@@ -40,11 +40,19 @@ fn mount(args: cmd_args::ArgMount) {
 	}
 }
 
+fn format(_args: cmd_args::ArgFormat) {
+	if let Some(mut driver) = create_driver() {
+		debug!("erasing fs...");
+		debug!("{:?}", driver.format());
+	}
+}
+
 fn main() {
 	let args = cmd_args::parse();
 
 	match args.command {
-		cmd_args::ArgCommand::Mount(args) => mount(args)
+		cmd_args::ArgCommand::Mount(args) => mount(args),
+		cmd_args::ArgCommand::Format(args) => format(args)
 	}
 }
 

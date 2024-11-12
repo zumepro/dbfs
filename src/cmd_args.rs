@@ -10,7 +10,8 @@ pub struct CmdArgs {
 #[derive(argp::FromArgs)]
 #[argp(subcommand)]
 pub enum ArgCommand {
-	Mount(ArgMount)
+	Mount(ArgMount),
+	Format(ArgFormat)
 }
 
 #[derive(argp::FromArgs)]
@@ -29,6 +30,11 @@ pub struct ArgMount {
     #[argp(description = "Path to the mountpoint.")]
 	pub mountpoint: String
 }
+
+#[derive(argp::FromArgs)]
+#[argp(description = "Formats the filesystem.")]
+#[argp(subcommand, name = "format")]
+pub struct ArgFormat {}
 
 pub fn parse() -> CmdArgs {
 	let args: CmdArgs = argp::parse_args_or_exit(argp::DEFAULT);

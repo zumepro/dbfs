@@ -124,6 +124,11 @@ impl DbfsDriver {
 		fuser::mount2(self, mountpoint, &options).unwrap();
 		panic!("FUSE driver crashed");
 	}
+
+	pub fn format(&mut self) -> Result<(), Error> {
+		let mut tl = self.tl.lock().unwrap();
+		tl.format()
+	}
 }
 
 impl fuser::Filesystem for DbfsDriver {
