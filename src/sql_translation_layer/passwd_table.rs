@@ -1,5 +1,5 @@
 use std::{collections::HashMap, sync::Mutex};
-use users::get_user_by_uid;
+use users::{get_user_by_uid, get_group_by_gid};
 use super::{commands, database_objects};
 use crate::debug;
 
@@ -72,7 +72,7 @@ impl PasswdTable {
     }
 
     if ! exists.1 {
-        let group_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
+        let group_read = get_group_by_gid(group).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
         let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
         debug!("ownermgr: groupadd: Adding group \"{}\" with gid {}", group_name_converted, group);
         conn.command(commands::SQL_INSERT_GROUP, Some(&vec![group.into(), group_name_converted.into()]))?;
@@ -94,7 +94,7 @@ impl PasswdTable {
     }
 
     if ! exists.0 {
-        let group_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
+        let group_read = get_group_by_gid(group).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
         let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
         self.groups.insert(group, group_name_converted.to_string());
     }
