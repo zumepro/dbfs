@@ -75,7 +75,7 @@ impl PasswdTable {
         let group_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
         let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
         debug!("ownermgr: groupadd: Adding group \"{}\" with gid {}", group_name_converted, group);
-        conn.command(commands::SQL_INSERT_GROUP, Some(&vec![user.into(), group_name_converted.into()]))?;
+        conn.command(commands::SQL_INSERT_GROUP, Some(&vec![group.into(), group_name_converted.into()]))?;
         self.groups.insert(group, group_name_converted.to_string());
     }
 
