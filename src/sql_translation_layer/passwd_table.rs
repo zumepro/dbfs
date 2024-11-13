@@ -63,20 +63,18 @@ impl PasswdTable {
     // If user or group does not exist in the table already - let's insert
     let mut conn = adapter.lock().map_err(|_| super::Error::RuntimeError(super::CONN_LOCK_FAILED))?;
 
-    if ! exists.0 {
-        let user_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read user from passwd"))?;
-        let user_name_converted = user_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
-        debug!("ownermgr: useradd: Adding user \"{}\" with uid {}", user_name_converted, user);
-        conn.command(commands::SQL_INSERT_USER, Some(&vec![user.into(), user_name_converted.into()]))?;
-        self.users.insert(user, user_name_converted.to_string());
+    if !exists.0 {
+		let name = self.get_user_by_uid(user)?;
+        debug!("ownermgr: useradd: Adding user \"{}\" with uid {}", &name, user);
+        conn.command(commands::SQL_INSERT_USER, Some(&vec![user.into(), name.as_str().into()]))?;
+        self.users.insert(user, name);
     }
 
-    if ! exists.1 {
-        let group_read = get_group_by_gid(group).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
-        let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
-        debug!("ownermgr: groupadd: Adding group \"{}\" with gid {}", group_name_converted, group);
-        conn.command(commands::SQL_INSERT_GROUP, Some(&vec![group.into(), group_name_converted.into()]))?;
-        self.groups.insert(group, group_name_converted.to_string());
+    if !exists.1 {
+		let name = self.get_group_by_gid(group)?;
+        debug!("ownermgr: groupadd: Adding group \"{}\" with gid {}", &name, group);
+        conn.command(commands::SQL_INSERT_GROUP, Some(&vec![group.into(), name.as_str().into()]))?;
+        self.groups.insert(group, name);
     }
 
     Ok(())
@@ -87,20 +85,38 @@ impl PasswdTable {
     let exists: (bool, bool) = (self.users.contains_key(&user), self.groups.contains_key(&group));
     if exists.0 && exists.1 { return Ok(()); }
 
-    if ! exists.0 {
-        let user_read = get_user_by_uid(user).ok_or(super::Error::RuntimeError("Unable to read user from passwd"))?;
-        let user_name_converted = user_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
-        self.users.insert(user, user_name_converted.to_string());
+    if !exists.0 {
+        self.users.insert(user, self.get_user_by_uid(user)?);
     }
 
-    if ! exists.0 {
-        let group_read = get_group_by_gid(group).ok_or(super::Error::RuntimeError("Unable to read group from passwd"))?;
-        let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert username from OsString"))?;
-        self.groups.insert(group, group_name_converted.to_string());
+    if !exists.0 {
+        self.groups.insert(group, self.get_group_by_gid(group)?);
     }
 
     Ok(())
     }
+	
+
+	fn get_user_by_uid(&self, user: u32) -> Result<String, super::Error> {
+        let user_read = match get_user_by_uid(user) {
+			Some(val) => val,
+			None => return Ok(format!("user{}", user))
+		};
+        let user_name_converted = user_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert user name from OsStr"))?;
+
+		Ok(user_name_converted.to_string())
+	}
+
+
+	fn get_group_by_gid(&self, group: u32) -> Result<String, super::Error> {
+        let group_read = match get_group_by_gid(group) {
+			Some(val) => val,
+			None => return Ok(format!("group{}", group))
+		};
+        let group_name_converted = group_read.name().to_str().ok_or(super::Error::RuntimeError("Unable to convert group name from OsStr"))?;
+
+		Ok(group_name_converted.to_string())
+	}
 }
 
 
