@@ -12,7 +12,7 @@ pub const SQL_PARAMS: &'static str = "ssl-mode=DISABLED";
 
 #[cfg(not(feature = "integration_testing"))]
 macro_rules! block_size{
-    () => { 4096 }
+    () => { 65536 }
 }
 
 
