@@ -11,7 +11,8 @@ pub struct CmdArgs {
 #[argp(subcommand)]
 pub enum ArgCommand {
 	Mount(ArgMount),
-	Format(ArgFormat)
+	Format(ArgFormat),
+	Import(ArgImport)
 }
 
 #[derive(argp::FromArgs)]
@@ -35,6 +36,15 @@ pub struct ArgMount {
 #[argp(description = "Formats the filesystem.")]
 #[argp(subcommand, name = "format")]
 pub struct ArgFormat {}
+
+#[derive(argp::FromArgs)]
+#[argp(description = "Imports another filesystem (or just a directory) into dbfs.")]
+#[argp(subcommand, name = "import")]
+pub struct ArgImport {
+	#[argp(positional)]
+    #[argp(description = "Path to the source filesystem.")]
+	pub source: String
+}
 
 pub fn parse() -> CmdArgs {
 	let args: CmdArgs = argp::parse_args_or_exit(argp::DEFAULT);

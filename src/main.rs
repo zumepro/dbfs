@@ -40,10 +40,17 @@ fn mount(args: cmd_args::ArgMount) {
 	}
 }
 
-fn format(_args: cmd_args::ArgFormat) {
+fn format() {
 	if let Some(mut driver) = create_driver() {
 		debug!("erasing fs...");
 		debug!("{:?}", driver.format());
+	}
+}
+
+fn import(args: cmd_args::ArgImport) {
+	if let Some(mut driver) = create_driver() {
+		debug!("erasing fs...");
+		debug!("{:?}", driver.import(std::path::Path::new(&args.source)));
 	}
 }
 
@@ -52,7 +59,8 @@ fn main() {
 
 	match args.command {
 		cmd_args::ArgCommand::Mount(args) => mount(args),
-		cmd_args::ArgCommand::Format(args) => format(args)
+		cmd_args::ArgCommand::Format(_) => format(),
+		cmd_args::ArgCommand::Import(args) => { format(); import(args); }
 	}
 }
 

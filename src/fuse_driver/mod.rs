@@ -13,6 +13,9 @@ use libc::EIO;
 use libc::{EINVAL, ENOENT, ENOTEMPTY};
 
 use std::ffi::OsStr;
+use std::os::unix::fs::FileTypeExt;
+use std::os::unix::fs::MetadataExt;
+use std::io::Read;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
@@ -98,6 +101,164 @@ impl Into<i32> for Error {
 	}
 }
 
+fn format_mode_block(mode: u32, weird_execute_char: Option<char>) -> String {
+	let r = match mode & 4 {
+		0 => '-',
+		_ => 'r'
+	};
+	let w = match mode & 2 {
+		0 => '-',
+		_ => 'w'
+	};
+	let x = match weird_execute_char {
+		Some(val) => val,
+		None => match mode & 1 {
+			0 => '-',
+			_ => 'x'
+		}
+	};
+
+	format!("{}{}{}", r, w, x)
+}
+
+fn format_metadata(metadata: &std::fs::Metadata) -> String {
+	let prefix = match (metadata.is_file(), metadata.is_dir(), metadata.is_symlink()) {
+		(true, false, false) => '-',
+		(false, true, false) => 'd',
+		(false, false, true) => 'l',
+		_ => '?'
+	};
+
+	let mode = metadata.mode();
+
+	let user = format_mode_block(mode >> 6, match mode & (1 << 11) {
+		0 => None,
+		_ => Some('s')
+	});
+	let group = format_mode_block(mode >> 3, match mode & (1 << 10) {
+		0 => None,
+		_ => Some('s')
+	});
+	let others = format_mode_block(mode, match mode & (1 << 9) {
+		0 => None,
+		_ => Some('t')
+	});
+
+	format!("{}{}{}{}, user {}, group {}", prefix, user, group, others, metadata.uid(), metadata.gid())
+}
+
+fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_inode: u64) -> Result<(), Error> {
+	// TODO - hardlinks
+	// TODO - xattr (error if any)
+
+	if parent_inode == 0 && !path.is_dir() {
+		return Err(Error::RuntimeError("source root is not a directory"))
+	}
+
+	let metadata = match path.symlink_metadata() {
+		Ok(val) => val,
+		Err(val) => {
+			debug!("fs premature error on {:?}: {:?}", path, val);
+			return Err(Error::RuntimeError("filesystem error"))
+		}
+	};
+
+	println!("{} {:?}", format_metadata(&metadata), &path.as_os_str());
+
+	let attr = driver_objects::FileSetAttr {
+		uid: metadata.uid(),
+		gid: metadata.gid(),
+		atime: metadata.accessed().unwrap(),
+		mtime: metadata.modified().unwrap(),
+		ctime: metadata.created().unwrap(),
+		perm: (metadata.mode() as u16).into()
+	};
+
+	let ftype = metadata.file_type();
+
+	if ftype.is_dir() {
+		let parent_inode = if parent_inode != 0 {
+			let name = path.components().last().unwrap().as_os_str();
+			tl.mknod(parent_inode, name, driver_objects::FileType::Directory, attr)?.ino as u64
+		} else {
+			tl.setattr(1, attr)?; // Root
+			1u64
+		};
+
+		let entries = match std::fs::read_dir(&path) {
+			Ok(val) => val,
+			Err(_) => return Err(Error::RuntimeError("could not iterate over path"))
+		};
+
+		for entry in entries {
+			let Ok(entry) = entry else { continue };
+			let path = entry.path();
+
+			import_recurse(tl, &path, parent_inode)?;
+		}
+
+		return Ok(())
+	}
+
+	if ftype.is_symlink() {
+		let name = path.components().last().unwrap().as_os_str();
+		let link = match path.read_link() {
+			Ok(val) => val,
+			Err(_) => return Err(Error::RuntimeError("could not read symlink"))
+		};
+		let link: String = link.as_os_str().to_string_lossy().into();
+		debug!(" -> {}", link);
+		
+		let ino = tl.mknod(parent_inode, name, driver_objects::FileType::Symlink, attr)?.ino as u64;
+		tl.unsafe_write(ino, 0, link.as_bytes())?;
+
+		return Ok(())
+	}
+
+	if ftype.is_file() {
+		let name = path.components().last().unwrap().as_os_str();
+		
+		let ino = tl.mknod(parent_inode, name, driver_objects::FileType::File, attr)?.ino as u64;
+
+		let mut infile = std::fs::File::open(&path).unwrap();
+		let mut buf = vec![0u8; 1048576];
+		let mut offset = 0usize;
+
+		loop {
+			let read = match infile.read(&mut buf) {
+				Ok(val) => val,
+				Err(val) => {
+					debug!("fs read error at offset {}: {:?}", offset, val);
+					return Err(Error::RuntimeError("fs read error"))
+				}
+			};
+			if read <= 0 { break }
+			tl.unsafe_write(ino, offset as u64, &buf[..read])?;
+			offset += read;
+		}
+
+		return Ok(())
+	}
+
+	if ftype.is_fifo() {
+		let name = path.components().last().unwrap().as_os_str();
+		
+		tl.mknod(parent_inode, name, driver_objects::FileType::NamedPipe, attr)?;
+
+		return Ok(())
+	}
+
+	if ftype.is_socket() {
+		let name = path.components().last().unwrap().as_os_str();
+		
+		tl.mknod(parent_inode, name, driver_objects::FileType::Socket, attr)?;
+
+		return Ok(())
+	}
+
+	Err(Error::RuntimeError("invalid file"))
+}
+
 pub struct DbfsDriver {
 	tl: Arc<Mutex<TranslationLayer>>,
 	last_readdir_inode: u64,
@@ -128,6 +289,12 @@ impl DbfsDriver {
 	pub fn format(&mut self) -> Result<(), Error> {
 		let mut tl = self.tl.lock().unwrap();
 		tl.format()
+	}
+
+	pub fn import(&mut self, path: &std::path::Path) -> Result<(), Error> {
+		let mut tl = self.tl.lock().unwrap();
+		let path = std::path::PathBuf::from(path);
+		import_recurse(&mut tl, &path, 0)
 	}
 }
 
