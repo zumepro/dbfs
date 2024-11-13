@@ -12,7 +12,7 @@ CREATE TABLE `file` (
   `parent_inode_id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) NOT NULL,
   `inode_id` int(10) UNSIGNED NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE `file_types` (
   `id` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -90,6 +90,11 @@ INSERT INTO `user` (`id`, `name`) VALUES
 (0, 'root'),
 (1, 'user');
 
+CREATE TABLE `extended_attributes` (
+  `inode_id` int(10) UNSIGNED NOT NULL,
+  `key` varchar(255) NOT NULL,
+  `value` longblob NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 ALTER TABLE `block`
   ADD PRIMARY KEY (`inode_id`,`block_id`);
@@ -102,6 +107,9 @@ INSERT INTO `file` (`parent_inode_id`, `name`, `inode_id`) VALUES
 
 ALTER TABLE `file_types`
   ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `extended_attributes`
+  ADD PRIMARY KEY (`inode_id`, `key`);
 
 ALTER TABLE `group`
   ADD PRIMARY KEY (`id`);
@@ -144,6 +152,11 @@ ALTER TABLE `block`
 ALTER TABLE `file`
   ADD CONSTRAINT `file_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`),
   ADD CONSTRAINT `file_parent_inode` FOREIGN KEY (`parent_inode_id`) REFERENCES `inode` (`id`);
+
+
+ALTER TABLE `extended_attributes`
+  ADD CONSTRAINT `xattr_inode` FOREIGN KEY (`inode_id`) REFERENCES `inode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 ALTER TABLE `inode`
   ADD CONSTRAINT `inode_file_type` FOREIGN KEY (`file_type`) REFERENCES `file_types` (`id`),
