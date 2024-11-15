@@ -299,28 +299,10 @@ pub const SQL_DROP_BLOCKS: &'static str = r#"DELETE FROM `block` WHERE `inode_id
 pub mod dynamic_queries {
     use const_format::formatcp;
     use crate::settings;
-    use crate::sql_translation_layer::database_objects;
 
     /// # Binds
     /// - `data` _for every block_
-    pub fn sql_write(blocks: &Vec<database_objects::Block>) -> String {
-        let mut query = String::with_capacity(500);
-        query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");
-        for block in blocks.iter() {
-            query.push_str(" (");
-            query.push_str(&block.inode_id.to_string());
-            query.push_str(",");
-            query.push_str(&block.block_id.to_string());
-            query.push_str(",?),");
-        }
-        query.pop();
-        query.push_str(" ON DUPLICATE KEY UPDATE `inode_id`=VALUES(`inode_id`), `block_id`=VALUES(`block_id`), `data`=VALUES(`data`)");
-        query
-    }
-
-    /// # Binds
-    /// - `data` _for every block_
-    pub fn sql_unsafe_write(inode_id: u64, start_block_id: u64, end_block_id: u64) -> String {
+    pub fn sql_write(inode_id: u64, start_block_id: u64, end_block_id: u64) -> String {
         let inode_id = inode_id.to_string();
         let mut query = String::with_capacity(500);
         query.push_str("INSERT INTO `block` (`inode_id`, `block_id`, `data`) VALUES");

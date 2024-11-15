@@ -333,66 +333,6 @@ impl TranslationLayer {
 	/// If the source buffer is larger than the current inode contents,
 	/// it will be automatically resized.
 	///
-	/// # Inputs
-	/// `inode: u64` is the id of the inode which will be written to
-	/// `offset: u64` is the offset in the inode's data
-	/// `buffer: &[u8]` is the source buffer
-	pub fn write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
-		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
-
-		let length = buffer.len();
-		if length == 0 { return Ok(()); }
-		let start_block = (offset / settings::FILE_BLOCK_SIZE) as usize;
-		let start = offset as usize - start_block * settings::FILE_BLOCK_SIZE_USIZE;
-		let end = offset as usize + length - 1;
-		let end_block = (end + 1).div_ceil(settings::FILE_BLOCK_SIZE_USIZE);
-		let block_count = end_block - start_block;
-
-		let size = match conn.query(commands::SQL_GET_SIZE_AND_HEAD, Some(&vec![inode.into()])) {
-			Ok(val) => match val.get(0) {
-				Some(val) => *val,
-				None => FileSizeAndHead { bytes: 0, blocks: 0, last_block_id: 0 }
-			},
-			Err(_) => FileSizeAndHead { bytes: 0, blocks: 0, last_block_id: 0 }
-		};
-		let db_filesize = size.bytes.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
-		let db_bc: u32 = size.blocks.try_into().map_err(|_| Error::RuntimeError(DBI64_TO_DRU32_CONVERSION_ERROR_MESSAGE))?;
-		// If not large enough, make it bigger
-		if end > db_filesize {
-			conn.command(commands::SQL_RESIZE_LAST_BLOCK, Some(&vec![settings::FILE_BLOCK_SIZE.into(), settings::FILE_BLOCK_SIZE.into(), inode.into()]))?;
-		}
-		if end_block as u32 > db_bc {
-			conn.command(commands::dynamic_queries::sql_pad_file(inode.try_into().map_err(|_| Error::RuntimeError(DRU64_TO_DBU32_CONVERSION_ERROR_MESSAGE))?, size.last_block_id.into(), end_block as u32 - db_bc).as_str(), None)?;
-		}
-
-		let mut blocks: Vec<database_objects::Block> = conn.query(commands::SQL_GET_FULL_BLOCKS, Some(&vec![inode.into(), (block_count as u64).into(), (start_block as u64).into()]))?;
-		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
-
-		let query = commands::dynamic_queries::sql_write(&blocks);
-
-		for (current_block, current_inblock_pos, byte) in buffer.iter().enumerate().map(|(idx, val)| {
-			let current_block = (idx + start) / settings::FILE_BLOCK_SIZE_USIZE;
-			let current_inblock_pos = idx + start - current_block * settings::FILE_BLOCK_SIZE_USIZE;
-			(current_block, current_inblock_pos, val)
-		}) {
-			blocks[current_block].data[current_inblock_pos] = *byte;
-		}
-
-		if blocks.len() != block_count { return Err(Error::ClientError(OOB_WRITE)); }
-
-		let _command_status = conn.command(query.as_str(), Some(&blocks.iter().map(|val| val.data.clone().into()).collect()))?;
-
-		//if blocks.len() as u64 != command_status.rows_affected { return Err(Error::ClientError(OOB_WRITE)); }
-
-		Ok(())
-	}
-
-
-	/// Write inode contents
-	///
-	/// If the source buffer is larger than the current inode contents,
-	/// it will be automatically resized.
-	///
 	/// # Note
 	/// Larger writes can benefit more from this function
 	///
@@ -405,7 +345,7 @@ impl TranslationLayer {
 	/// `inode: u64` is the id of the inode which will be written to
 	/// `offset: u64` is the offset in the inode's data
 	/// `buffer: &[u8]` is the source buffer
-	pub fn unsafe_write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
+	pub fn write(&mut self, inode: u64, offset: u64, buffer: &[u8]) -> Result<(), Error> {
 		let mut conn = self.0.lock().map_err(|_| Error::DbLockError)?;
 
 		let buffer_len = buffer.len() as u64;
@@ -490,7 +430,7 @@ impl TranslationLayer {
 		}
 
 		// Generate the insert query
-		let command = commands::dynamic_queries::sql_unsafe_write(inode, start_block + 1, end_block + 1);
+		let command = commands::dynamic_queries::sql_write(inode, start_block + 1, end_block + 1);
 		// Now let's INSERT ... good luck
 		conn.command(command.as_str(), Some(&data))?;
 

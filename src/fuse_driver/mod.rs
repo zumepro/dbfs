@@ -219,7 +219,7 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 		debug!(" -> {}", &link);
 		
 		let ino = tl.mknod(parent_inode, name, driver_objects::FileType::Symlink, attr)?.ino as u64;
-		tl.unsafe_write(ino, 0, link.as_bytes())?;
+		tl.write(ino, 0, link.as_bytes())?;
 
 		return Ok(())
 	}
@@ -256,7 +256,7 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 			};
 			if read <= 0 { break }
 			debug!(" -> writing {} bytes at offset {}", &read, &offset);
-			tl.unsafe_write(ino, offset as u64, &buf[..read])?;
+			tl.write(ino, offset as u64, &buf[..read])?;
 			offset += read;
 		}
 
@@ -651,7 +651,7 @@ impl fuser::Filesystem for DbfsDriver {
 			}
 		};
 
-		if let Err(err) = tl.unsafe_write(attr.ino.into(), 0, target) {
+		if let Err(err) = tl.write(attr.ino.into(), 0, target) {
 			debug!(" -> Err while writing symlink data: {:?}", &err);
 			reply.error(ENOENT);
 			return
