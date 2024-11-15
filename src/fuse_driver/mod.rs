@@ -154,7 +154,6 @@ struct HardLink {
 }
 
 fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_inode: u64, links: &mut Vec<HardLink>) -> Result<(), Error> {
-	// TODO - hardlinks
 	// TODO - xattr (error if any)
 
 	if parent_inode == 0 && !path.is_dir() {
@@ -217,7 +216,7 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 			Err(_) => return Err(Error::RuntimeError("could not read symlink"))
 		};
 		let link: String = link.as_os_str().to_string_lossy().into();
-		debug!(" -> {}", link);
+		debug!(" -> {}", &link);
 		
 		let ino = tl.mknod(parent_inode, name, driver_objects::FileType::Symlink, attr)?.ino as u64;
 		tl.unsafe_write(ino, 0, link.as_bytes())?;
