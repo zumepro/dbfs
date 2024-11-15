@@ -147,7 +147,13 @@ fn format_metadata(metadata: &std::fs::Metadata) -> String {
 	format!("{}{}{}{}, user {}, group {}", prefix, user, group, others, metadata.uid(), metadata.gid())
 }
 
-fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_inode: u64) -> Result<(), Error> {
+#[derive(Debug)]
+struct HardLink {
+	src_inode: u64,
+	dbfs_inode: u64
+}
+
+fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_inode: u64, links: &mut Vec<HardLink>) -> Result<(), Error> {
 	// TODO - hardlinks
 	// TODO - xattr (error if any)
 
@@ -194,13 +200,17 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 			let Ok(entry) = entry else { continue };
 			let path = entry.path();
 
-			import_recurse(tl, &path, parent_inode)?;
+			import_recurse(tl, &path, parent_inode, links)?;
 		}
 
 		return Ok(())
 	}
 
 	if ftype.is_symlink() {
+		if metadata.nlink() > 1 {
+			panic!("Symlinked hardlink detected!");
+		}
+
 		let name = path.components().last().unwrap().as_os_str();
 		let link = match path.read_link() {
 			Ok(val) => val,
@@ -218,7 +228,20 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 	if ftype.is_file() {
 		let name = path.components().last().unwrap().as_os_str();
 		
+		if metadata.nlink() > 1 {
+			for link in &*links {
+				if link.src_inode != metadata.ino() { continue; }
+
+				tl.link(parent_inode, name, link.dbfs_inode)?;
+				return Ok(())
+			}
+		}
+
 		let ino = tl.mknod(parent_inode, name, driver_objects::FileType::File, attr)?.ino as u64;
+
+		if metadata.nlink() > 1 {
+			links.push(HardLink { src_inode: metadata.ino(), dbfs_inode: ino });
+		}
 
 		let mut infile = std::fs::File::open(&path).unwrap();
 		let mut buf = vec![0u8; 1048576];
@@ -233,6 +256,7 @@ fn import_recurse(tl: &mut TranslationLayer, path: &std::path::PathBuf, parent_i
 				}
 			};
 			if read <= 0 { break }
+			debug!(" -> writing {} bytes at offset {}", &read, &offset);
 			tl.unsafe_write(ino, offset as u64, &buf[..read])?;
 			offset += read;
 		}
@@ -294,7 +318,10 @@ impl DbfsDriver {
 	pub fn import(&mut self, path: &std::path::Path) -> Result<(), Error> {
 		let mut tl = self.tl.lock().unwrap();
 		let path = std::path::PathBuf::from(path);
-		import_recurse(&mut tl, &path, 0)
+		let mut links: Vec<HardLink> = Vec::new();
+		import_recurse(&mut tl, &path, 0, &mut links)?;
+		println!("done, detected {} inodes with multiple links", links.len());
+		Ok(())
 	}
 }
 
