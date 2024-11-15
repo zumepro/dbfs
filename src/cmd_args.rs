@@ -1,7 +1,7 @@
 use argp;
 
 #[derive(argp::FromArgs)]
-#[argp(description = "dbfs - FUSE driver for the revolutionary dbfs")]
+#[argp(description = "dbfs - FUSE driver for dbfs")]
 pub struct CmdArgs {
 	#[argp(subcommand)]
 	pub command: ArgCommand
