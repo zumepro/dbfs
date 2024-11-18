@@ -84,3 +84,8 @@ just test mysql
 ```bash
 just stop
 ```
+
+
+## Booting Arch Linux
+Installing Arch Linux in dbfs and booting from it is a relatively long process. Full instructions are available in a [separate document](LINUX_BOOT.md).
+
